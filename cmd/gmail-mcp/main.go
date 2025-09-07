@@ -16,11 +16,13 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/gmail/v1"
 
 	"github.com/hal9000y/gmail-mcp/internal/auth"
+	"github.com/hal9000y/gmail-mcp/internal/tool"
 )
 
 func main() {
@@ -42,6 +44,8 @@ func main() {
 		panic("Env variables OAUTH_GOOGLE_CLIENT_ID and OAUTH_GOOGLE_CLIENT_SECRET must be set")
 	}
 
+	log.Println("oauth-url", *oauthURL)
+
 	config := &oauth2.Config{
 		ClientID:     oauthClientID,
 		ClientSecret: oauthClientSec,
@@ -58,7 +62,7 @@ func main() {
 	defer func() {
 		log.Println("Persisting token if exists")
 		if err := tok.Persist(); err != nil {
-			fmt.Println(fmt.Errorf("tok.Persist failed: %w", err))
+			log.Println(fmt.Errorf("tok.Persist failed: %w", err))
 		}
 	}()
 
@@ -66,6 +70,12 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.Handle("/oauth", authHTTP)
+
+	gmailH := tool.NewGmailHandler(config, tok)
+	gmailT := tool.NewGmailToolSet(gmailH)
+	mcpHTTP := mcp.NewStreamableHTTPHandler(func(req *http.Request) *mcp.Server { return gmailT }, nil)
+
+	mux.Handle("/mcp", loggingHandler(mcpHTTP))
 
 	srv := http.Server{
 		Handler: mux,
@@ -120,4 +130,43 @@ func openBrowser(url string) {
 	if err != nil {
 		log.Printf("Could not open browser automatically: %v; please copy and open link in the browser: %s\n", err, url)
 	}
+}
+
+type responseWriter struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func (rw *responseWriter) WriteHeader(code int) {
+	rw.statusCode = code
+	rw.ResponseWriter.WriteHeader(code)
+}
+
+func loggingHandler(handler http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+
+		// Create a response writer wrapper to capture status code.
+		wrapped := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+
+		// Log request details.
+		log.Printf("[REQUEST] %s | %s | %s %s",
+			start.Format(time.RFC3339),
+			r.RemoteAddr,
+			r.Method,
+			r.URL.Path)
+
+		// Call the actual handler.
+		handler.ServeHTTP(wrapped, r)
+
+		// Log response details.
+		duration := time.Since(start)
+		log.Printf("[RESPONSE] %s | %s | %s %s | Status: %d | Duration: %v",
+			time.Now().Format(time.RFC3339),
+			r.RemoteAddr,
+			r.Method,
+			r.URL.Path,
+			wrapped.statusCode,
+			duration)
+	})
 }
