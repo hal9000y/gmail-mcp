@@ -22,9 +22,7 @@ type GetMessagesResponse struct {
 
 type MessageContent struct {
 	Summary     MessageSummary `json:"summary" jsonschema:"summary"`
-	BodyText    string         `json:"body_text,omitempty" jsonschema:"plain text body"`
-	BodyHTML    string         `json:"body_html,omitempty" jsonschema:"HTML body"`
-	BodyMD      string         `json:"body_md,omitempty" jsonschema:"markdown converted body"`
+	BodyText    string         `json:"body_text,omitempty" jsonschema:"text body"`
 	Attachments []Attachment   `json:"attachments,omitempty" jsonschema:"list of attachments"`
 }
 
@@ -58,10 +56,13 @@ func (h *GmailHandler) GetMessages(
 		}
 
 		if msg.Payload != nil {
-			textBody, htmlBody := extractMessageBodies(msg.Payload)
-			content.BodyText = textBody
-			content.BodyHTML = htmlBody
 			content.Attachments = extractAttachments(msg.Payload)
+
+			textBody, htmlBody := extractMessageBodies(msg.Payload)
+			content.BodyText, err = h.previewText(textBody, htmlBody)
+			if err != nil {
+				return nil, GetMessagesResponse{}, fmt.Errorf("previewText failed: %w", err)
+			}
 		}
 
 		messages = append(messages, content)
@@ -70,6 +71,22 @@ func (h *GmailHandler) GetMessages(
 	return nil, GetMessagesResponse{
 		Messages: messages,
 	}, nil
+}
+
+func (h *GmailHandler) previewText(textBody, htmlBody string) (string, error) {
+	if textBody != "" {
+		return textBody, nil
+	}
+	if htmlBody == "" {
+		return "", nil
+	}
+
+	converted, err := h.conv.HTML2MD([]byte(htmlBody))
+	if err != nil {
+		return "", fmt.Errorf("conv.HTML2MD failed: %w", err)
+	}
+
+	return converted, nil
 }
 
 func extractMessageBodies(payload *gmail.MessagePart) (textBody, htmlBody string) {

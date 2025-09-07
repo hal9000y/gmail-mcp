@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"os"
-	"os/exec"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -69,7 +67,7 @@ func (h *GmailHandler) PreviewAttachments(
 			MimeType: mimeType,
 		}
 
-		data, err := extractAttachmentContent(attachment.Data, preview.MimeType, preview.Filename)
+		data, err := h.extractAttachmentContent(attachment.Data, preview.MimeType, preview.Filename)
 		if err != nil {
 			preview.Error = err.Error()
 		} else {
@@ -98,7 +96,7 @@ func findAttachmentMetadata(payload *gmail.MessagePart, partID string) *gmail.Me
 	return nil
 }
 
-func extractAttachmentContent(data, mimeType, filename string) (string, error) {
+func (h *GmailHandler) extractAttachmentContent(data, mimeType, filename string) (string, error) {
 	decodedData, err := base64.URLEncoding.DecodeString(data)
 	if err != nil {
 		decodedData, err = base64.RawURLEncoding.DecodeString(data)
@@ -112,7 +110,7 @@ func extractAttachmentContent(data, mimeType, filename string) (string, error) {
 		return string(decodedData), nil
 
 	case mimeType == "application/pdf":
-		return extractPDFText(decodedData)
+		return h.conv.PDF2MD(decodedData)
 
 	case strings.HasSuffix(filename, ".txt") || strings.HasSuffix(filename, ".md"):
 		return string(decodedData), nil
@@ -123,26 +121,4 @@ func extractAttachmentContent(data, mimeType, filename string) (string, error) {
 	default:
 		return "", fmt.Errorf("unsupported file type: %s", mimeType)
 	}
-}
-
-func extractPDFText(pdfData []byte) (string, error) {
-	tmpFile, err := os.CreateTemp("", "attachment-*.pdf")
-	if err != nil {
-		return "", fmt.Errorf("failed to create temp file: %w", err)
-	}
-	defer os.Remove(tmpFile.Name())
-
-	if _, err := tmpFile.Write(pdfData); err != nil {
-		tmpFile.Close()
-		return "", fmt.Errorf("failed to write PDF data: %w", err)
-	}
-	tmpFile.Close()
-
-	cmd := exec.Command("pdftotext", "-layout", tmpFile.Name(), "-")
-	output, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("pdftotext failed: %w", err)
-	}
-
-	return string(output), nil
 }

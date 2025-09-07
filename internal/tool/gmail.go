@@ -9,13 +9,19 @@ import (
 
 const gmailUserID = "me"
 
-type GmailHandler struct {
-	cfg *oauth2.Config
-	tok *auth.Token
+type converter interface {
+	PDF2MD([]byte) (string, error)
+	HTML2MD([]byte) (string, error)
 }
 
-func NewGmailHandler(cfg *oauth2.Config, tok *auth.Token) *GmailHandler {
-	return &GmailHandler{cfg: cfg, tok: tok}
+type GmailHandler struct {
+	conv converter
+	cfg  *oauth2.Config
+	tok  *auth.Token
+}
+
+func NewGmailHandler(conv converter, cfg *oauth2.Config, tok *auth.Token) *GmailHandler {
+	return &GmailHandler{conv: conv, cfg: cfg, tok: tok}
 }
 
 func NewGmailToolSet(h *GmailHandler) *mcp.Server {

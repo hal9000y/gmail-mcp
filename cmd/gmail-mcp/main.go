@@ -22,6 +22,7 @@ import (
 	"google.golang.org/api/gmail/v1"
 
 	"github.com/hal9000y/gmail-mcp/internal/auth"
+	"github.com/hal9000y/gmail-mcp/internal/format"
 	"github.com/hal9000y/gmail-mcp/internal/tool"
 )
 
@@ -71,7 +72,8 @@ func main() {
 	mux := http.NewServeMux()
 	mux.Handle("/oauth", authHTTP)
 
-	gmailH := tool.NewGmailHandler(config, tok)
+	conv := format.Converter{}
+	gmailH := tool.NewGmailHandler(conv, config, tok)
 	gmailT := tool.NewGmailToolSet(gmailH)
 	mcpHTTP := mcp.NewStreamableHTTPHandler(func(req *http.Request) *mcp.Server { return gmailT }, nil)
 

@@ -53,6 +53,7 @@ The server will:
 
 ## References
 
+- [Gmail API - quickstart](https://developers.google.com/workspace/gmail/api/quickstart/go)
 - [Gmail API - messages.list](https://developers.google.com/workspace/gmail/api/reference/rest/v1/users.messages/list) - Gmail search query syntax documentation
 - [MCP Go SDK](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp) - Model Context Protocol SDK for Go
 
