@@ -1,0 +1,148 @@
+package tool
+
+import (
+	"context"
+	"encoding/base64"
+	"fmt"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"google.golang.org/api/gmail/v1"
+
+	"github.com/hal9000y/gmail-mcp/internal/gservice"
+)
+
+// GetMessages - Returns full message content with bodies converted to markdown
+type GetMessagesRequest struct {
+	MessageIDs []string `json:"message_ids" jsonschema:"array of message IDs to retrieve"`
+}
+
+type GetMessagesResponse struct {
+	Messages []MessageContent `json:"messages" jsonschema:"array of full message contents"`
+}
+
+type MessageContent struct {
+	Summary     MessageSummary `json:"summary" jsonschema:"summary"`
+	BodyText    string         `json:"body_text,omitempty" jsonschema:"plain text body"`
+	BodyHTML    string         `json:"body_html,omitempty" jsonschema:"HTML body"`
+	BodyMD      string         `json:"body_md,omitempty" jsonschema:"markdown converted body"`
+	Attachments []Attachment   `json:"attachments,omitempty" jsonschema:"list of attachments"`
+}
+
+type Attachment struct {
+	ID       string `json:"id" jsonschema:"attachment ID"`
+	Filename string `json:"filename" jsonschema:"original filename"`
+	MimeType string `json:"mime_type" jsonschema:"MIME type"`
+	Size     int64  `json:"size" jsonschema:"size in bytes"`
+}
+
+func (h *GmailHandler) GetMessages(
+	ctx context.Context,
+	req *mcp.CallToolRequest,
+	input GetMessagesRequest,
+) (*mcp.CallToolResult, GetMessagesResponse, error) {
+	srv, err := gservice.NewGmail(ctx, h.cfg, h.tok)
+	if err != nil {
+		return nil, GetMessagesResponse{}, fmt.Errorf("gservice.NewGmail failed: %w", err)
+	}
+
+	messages := make([]MessageContent, 0, len(input.MessageIDs))
+
+	for _, msgID := range input.MessageIDs {
+		msg, err := srv.Users.Messages.Get(gmailUserID, msgID).Do()
+		if err != nil {
+			return nil, GetMessagesResponse{}, fmt.Errorf("get message %s failed: %w", msgID, err)
+		}
+
+		content := MessageContent{
+			Summary: extractMessageSummary(msg),
+		}
+
+		if msg.Payload != nil {
+			textBody, htmlBody := extractMessageBodies(msg.Payload)
+			content.BodyText = textBody
+			content.BodyHTML = htmlBody
+			content.Attachments = extractAttachments(msg.Payload)
+		}
+
+		messages = append(messages, content)
+	}
+
+	return nil, GetMessagesResponse{
+		Messages: messages,
+	}, nil
+}
+
+func extractMessageBodies(payload *gmail.MessagePart) (textBody, htmlBody string) {
+	if payload.Body != nil && payload.Body.Data != "" {
+		if payload.MimeType == "text/plain" {
+			textBody = decodeBase64URL(payload.Body.Data)
+		} else if payload.MimeType == "text/html" {
+			htmlBody = decodeBase64URL(payload.Body.Data)
+		}
+	}
+
+	for _, part := range payload.Parts {
+		if part.MimeType == "text/plain" && textBody == "" {
+			if part.Body != nil && part.Body.Data != "" {
+				textBody = decodeBase64URL(part.Body.Data)
+			}
+		} else if part.MimeType == "text/html" && htmlBody == "" {
+			if part.Body != nil && part.Body.Data != "" {
+				htmlBody = decodeBase64URL(part.Body.Data)
+			}
+		}
+
+		if len(part.Parts) > 0 {
+			nestedText, nestedHTML := extractMessageBodies(part)
+			if textBody == "" {
+				textBody = nestedText
+			}
+			if htmlBody == "" {
+				htmlBody = nestedHTML
+			}
+		}
+	}
+
+	return textBody, htmlBody
+}
+
+func decodeBase64URL(data string) string {
+	decoded, err := base64.URLEncoding.DecodeString(data)
+	if err != nil {
+		decoded, err = base64.RawURLEncoding.DecodeString(data)
+		if err != nil {
+			return data
+		}
+	}
+	return string(decoded)
+}
+
+func extractAttachments(payload *gmail.MessagePart) []Attachment {
+	var attachments []Attachment
+
+	if payload.Body != nil && payload.Body.AttachmentId != "" {
+		attachments = append(attachments, Attachment{
+			ID:       payload.Body.AttachmentId,
+			Filename: payload.Filename,
+			MimeType: payload.MimeType,
+			Size:     payload.Body.Size,
+		})
+	}
+
+	for _, part := range payload.Parts {
+		if part.Body != nil && part.Body.AttachmentId != "" {
+			attachments = append(attachments, Attachment{
+				ID:       part.PartId,
+				Filename: part.Filename,
+				MimeType: part.MimeType,
+				Size:     part.Body.Size,
+			})
+		}
+
+		if len(part.Parts) > 0 {
+			attachments = append(attachments, extractAttachments(part)...)
+		}
+	}
+
+	return attachments
+}
