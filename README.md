@@ -18,9 +18,8 @@ A simple read-only Gmail MCP (Model Context Protocol) server that provides Gmail
 ## Setup
 
 1. Create a Google Cloud project and enable Gmail API
-2. Create OAuth2 credentials for a web application
-3. Set redirect URI to `http://localhost:8081/oauth`
-4. Create `.env.local` file with your credentials:
+2. Create OAuth2 credentials for a desktop application
+3. Create `.env.local` file with your credentials:
 
 ```bash
 OAUTH_GOOGLE_CLIENT_ID=your_client_id_here
@@ -36,7 +35,7 @@ go run ./cmd/gmail-mcp/main.go
 ```
 
 The server will:
-- Start on `http://localhost:8081`
+- Start on a random port on localhost, unless `http-addr` argument was provided
 - Automatically open browser for OAuth authentication on first run
 - Cache the token locally for subsequent runs
 - Expose MCP endpoint at `/mcp`

@@ -27,15 +27,21 @@ import (
 )
 
 func main() {
-	_ = godotenv.Load(".env.local", ".env")
-	httpAddr := flag.String("http-addr", "127.0.0.1:8081", "HTTP SERVER listen addr")
+	httpAddr := flag.String("http-addr", "localhost:0", "HTTP SERVER listen addr")
 	oauthTokenFile := flag.String("oauth-token-file", ".__gmail-mcp-token.json", "Path to cache google oauth token, empty to avoid storing")
-	oauthURL := flag.String("oauth-url", "http://localhost:8081/oauth", "")
+	oauthURLParam := flag.String("oauth-url", "", "OAuth URL")
+	envFileParam := flag.String("env-file", ".env.local", "Path to env file")
 
 	flag.Parse()
 
-	if httpAddr == nil || oauthTokenFile == nil || oauthURL == nil {
+	if httpAddr == nil || oauthTokenFile == nil {
 		panic("incomplete parameters provided")
+	}
+
+	if envFileParam != nil && *envFileParam != "" {
+		if err := godotenv.Load(*envFileParam); err != nil {
+			panic(fmt.Errorf("godotenv.Load failed: %w", err))
+		}
 	}
 
 	oauthClientID := os.Getenv("OAUTH_GOOGLE_CLIENT_ID")
@@ -45,12 +51,20 @@ func main() {
 		panic("Env variables OAUTH_GOOGLE_CLIENT_ID and OAUTH_GOOGLE_CLIENT_SECRET must be set")
 	}
 
-	log.Println("oauth-url", *oauthURL)
+	ln, err := net.Listen("tcp", *httpAddr)
+	if err != nil {
+		panic(fmt.Errorf("net.Listen failed: %w", err))
+	}
+
+	oauthURL := fmt.Sprintf("http://%s/oauth", ln.Addr().String())
+	if oauthURLParam != nil && *oauthURLParam != "" {
+		oauthURL = *oauthURLParam
+	}
 
 	config := &oauth2.Config{
 		ClientID:     oauthClientID,
 		ClientSecret: oauthClientSec,
-		RedirectURL:  *oauthURL,
+		RedirectURL:  oauthURL,
 		Scopes:       []string{gmail.GmailReadonlyScope},
 		Endpoint:     google.Endpoint,
 	}
@@ -83,29 +97,51 @@ func main() {
 		Handler: mux,
 	}
 
-	ln, err := net.Listen("tcp", *httpAddr)
-	if err != nil {
-		panic(fmt.Errorf("net.Listen failed: %w", err))
-	}
-
 	shutdown := make(chan os.Signal, 1)
 
 	signal.Notify(shutdown, syscall.SIGTERM, syscall.SIGINT)
 
 	if _, err := tok.OAuthToken(); errors.Is(err, auth.TokenNotSet) {
-		openBrowser(*oauthURL)
+		openBrowser(oauthURL)
 	}
 
+	errHTTPCh := make(chan error, 1)
 	go func() {
-		defer close(shutdown)
-		if err := srv.Serve(ln); err != http.ErrServerClosed {
-			log.Println(fmt.Errorf("srv.ListenAndServe failed: %w", err))
+		log.Println("Starting http server on", ln.Addr().String())
+
+		err := srv.Serve(ln)
+		if err != nil {
+			err = fmt.Errorf("srv.ListenAndServe failed: %w", err)
 		}
+		if !errors.Is(err, http.ErrServerClosed) {
+			log.Println("HTTP server closed with error", err)
+		}
+
+		errHTTPCh <- err
 	}()
 
-	<-shutdown
+	stdioCtx, stdioCancel := context.WithCancel(context.Background())
+	defer stdioCancel()
+	errStdioCh := make(chan error, 1)
+	go func() {
+		log.Println("Starting stdio transport")
+		err := gmailT.Run(stdioCtx, &mcp.StdioTransport{})
+		if err != nil {
+			err = fmt.Errorf("gmailT.Run failed: %w", err)
+			log.Println("gmailT.Run failed", err)
+		}
 
-	log.Println("Shutdown signal received")
+		errStdioCh <- err
+	}()
+
+	select {
+	case err := <-errHTTPCh:
+		log.Println("Error http server", err)
+	case err := <-errStdioCh:
+		log.Println("Error stdio", err)
+	case <-shutdown:
+		log.Println("Shutdown signal received")
+	}
 
 	shCtx, shCancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer shCancel()
@@ -113,6 +149,11 @@ func main() {
 	if err := srv.Shutdown(shCtx); err != nil {
 		log.Println(fmt.Errorf("srv.Shutdown failed: %w", err))
 	}
+
+	stdioCancel()
+
+	<-errStdioCh
+	<-errHTTPCh
 }
 
 func openBrowser(url string) {
