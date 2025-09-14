@@ -67,18 +67,23 @@ Set these in `.env.local` or as environment variables:
 - `http_handler.go`: HTTP handler for OAuth callback flow
 - Token caching in `.__gmail-mcp-token.json` (gitignored)
 
-**Gmail Integration (`internal/gservice/service.go`)**
-- Creates Gmail API client using OAuth2 token
+**Gmail Integration (`internal/gservice/gmail.go`)**
+- Facade pattern for Gmail API operations
+- Implements minimal interfaces required by each tool
+- Methods: `ListMessages`, `GetMessageMetadata`, `GetMessage`, `GetAttachment`
 - Handles token refresh automatically
 
 **MCP Tools (`internal/tool/`)**
-- `gmail.go`: Implements Gmail-related MCP tools
-- Tool registration with MCP server
-- Structured request/response types with JSON and jsonschema tags
-- Tools being implemented:
-  - `search_messages` - Returns minimal metadata (ID, thread, date, from, subject, snippet)
-  - `get_messages` - Returns full message with markdown-converted body
-  - `preview_attachments` - Extracts text content from attachments
+- Each tool is a separate struct with dependency injection
+- `search_messages.go`: SearchMessages - finds messages by query
+- `get_messages.go`: GetMessages - retrieves full message content
+- `preview_attachments.go`: PreviewAttachments - extracts text from attachments
+- `common_model.go`: Shared types (EmailAddress, MessageSummary)
+- `server.go`: MCP server setup and tool registration
+
+**Format Converters (`internal/format/`)**
+- `converter.go`: HTML to Markdown and PDF to Markdown conversion
+- Uses external tools: `pandoc` for HTML→MD, `pdftohtml` for PDF→HTML
 
 ### Transport Modes
 
@@ -100,12 +105,29 @@ The server supports two transport modes:
 - Transport handler: `mcp.NewStreamableHTTPHandler` for HTTP
 - Compatible with Claude Desktop, n8n, LangChain agents, and web-based MCP clients
 
+## Testing Strategy
+
+### Interface-Based Testing
+- Each tool uses minimal interfaces for dependencies
+- Mock implementations can be created for Gmail service and converters
+- Example interfaces:
+  - `searchMessagesSvc`: `ListMessages`, `GetMessageMetadata`
+  - `getMessagesSvc`: `GetMessage`
+  - `previewAttachmentsSvc`: `GetMessage`, `GetAttachment`
+  - `htmlConverter`: `HTML2MD`
+  - `pdfConverter`: `PDF2MD`
+
+### Testing Approach
+- Unit tests: Mock the service interfaces for each tool
+- Integration tests: Use Google's test API or local Gmail test account
+- No test files currently exist - implement as needed
+
 ## Development Notes
 
 - Token files (`.__*`) are gitignored for security
 - `.env.local` is gitignored - create from `.env` template
-- No tests currently exist - implement as needed
 - Gmail API scope: `gmail.readonly` for read-only access
+- External dependencies: `pandoc` and `pdftohtml` for document conversion
 
 ## Code Style Guidelines
 
@@ -115,3 +137,25 @@ The server supports two transport modes:
 - Use structured types (e.g., `EmailAddress`) for better data organization
 - Embed common structs to avoid duplication (e.g., `MessageSummary` in `MessageContent`)
 - Use Gmail API `Fields` parameter to minimize API calls
+- Follow Go conventions for error naming (e.g., `ErrTokenNotSet`)
+- Use defer for cleanup operations with error logging
+- Prefer switch statements over if-else chains for type checking
+
+## Code Quality
+
+### Linting
+The project passes all default `golangci-lint` checks including:
+- `revive`: Go code style checker
+- `errcheck`: Ensures all errors are handled
+- `staticcheck`: Go static analysis
+- `cyclop`: Cyclomatic complexity checker
+
+Run linters:
+```bash
+golangci-lint run
+```
+
+### Error Handling
+- All errors are handled or explicitly ignored with `_`
+- Cleanup errors (file close, remove) are logged but don't fail operations
+- Error messages follow format: `functionName failed: %w`
