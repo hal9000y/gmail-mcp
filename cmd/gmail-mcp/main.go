@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -31,12 +32,17 @@ func main() {
 	oauthTokenFile := flag.String("oauth-token-file", ".__gmail-mcp-token.json", "Path to cache google oauth token, empty to avoid storing")
 	oauthURLParam := flag.String("oauth-url", "", "OAuth URL")
 	envFileParam := flag.String("env-file", ".env.local", "Path to env file")
+	enableStdio := flag.Bool("stdio", false, "Enable stdio transport for MCP (disables stdout logging)")
+	logFile := flag.String("log-file", "", "Path to log file (only used with stdio transport, otherwise logs to stdout)")
 
 	flag.Parse()
 
 	if httpAddr == nil || oauthTokenFile == nil {
 		panic("incomplete parameters provided")
 	}
+
+	persistLogs := setupLogger(enableStdio, logFile)
+	defer persistLogs()
 
 	if envFileParam != nil && *envFileParam != "" {
 		if err := godotenv.Load(*envFileParam); err != nil {
@@ -91,9 +97,9 @@ func main() {
 	gmailT := tool.NewGmailToolSet(gmailH)
 	mcpHTTP := mcp.NewStreamableHTTPHandler(func(req *http.Request) *mcp.Server { return gmailT }, nil)
 
-	mux.Handle("/mcp", loggingHandler(mcpHTTP))
+	mux.Handle("/mcp", mcpHTTP)
 
-	srv := http.Server{
+	srv := &http.Server{
 		Handler: mux,
 	}
 
@@ -105,34 +111,15 @@ func main() {
 		openBrowser(oauthURL)
 	}
 
-	errHTTPCh := make(chan error, 1)
-	go func() {
-		log.Println("Starting http server on", ln.Addr().String())
+	stopHTTP, errHTTPCh := serveHTTP(srv, ln)
+	defer stopHTTP()
 
-		err := srv.Serve(ln)
-		if err != nil {
-			err = fmt.Errorf("srv.ListenAndServe failed: %w", err)
-		}
-		if !errors.Is(err, http.ErrServerClosed) {
-			log.Println("HTTP server closed with error", err)
-		}
-
-		errHTTPCh <- err
-	}()
-
-	stdioCtx, stdioCancel := context.WithCancel(context.Background())
-	defer stdioCancel()
-	errStdioCh := make(chan error, 1)
-	go func() {
-		log.Println("Starting stdio transport")
-		err := gmailT.Run(stdioCtx, &mcp.StdioTransport{})
-		if err != nil {
-			err = fmt.Errorf("gmailT.Run failed: %w", err)
-			log.Println("gmailT.Run failed", err)
-		}
-
-		errStdioCh <- err
-	}()
+	var errStdioCh <-chan error
+	if *enableStdio {
+		var stopStdio func()
+		stopStdio, errStdioCh = serveStdio(gmailT)
+		defer stopStdio()
+	}
 
 	select {
 	case err := <-errHTTPCh:
@@ -142,18 +129,78 @@ func main() {
 	case <-shutdown:
 		log.Println("Shutdown signal received")
 	}
+}
 
-	shCtx, shCancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer shCancel()
+func serveStdio(srv *mcp.Server) (func(), <-chan error) {
+	errStdioCh := make(chan error, 1)
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		defer close(errStdioCh)
+		log.Println("Starting stdio transport")
 
-	if err := srv.Shutdown(shCtx); err != nil {
-		log.Println(fmt.Errorf("srv.Shutdown failed: %w", err))
+		if err := srv.Run(ctx, &mcp.StdioTransport{}); err != nil {
+			err = fmt.Errorf("srv.Run failed: %w", err)
+			errStdioCh <- err
+		}
+	}()
+
+	return func() {
+		cancel()
+
+		<-errStdioCh
+		log.Println("Stdio transport stopped")
+	}, errStdioCh
+}
+
+func serveHTTP(srv *http.Server, ln net.Listener) (func(), <-chan error) {
+	errHTTPCh := make(chan error, 1)
+	go func() {
+		defer close(errHTTPCh)
+
+		log.Println("Starting http server on", ln.Addr().String())
+
+		err := srv.Serve(ln)
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			err = fmt.Errorf("srv.ListenAndServe failed: %w", err)
+			log.Println(err)
+			errHTTPCh <- err
+		}
+	}()
+
+	return func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		if err := srv.Shutdown(ctx); err != nil {
+			log.Println(fmt.Errorf("srv.Shutdown failed: %w", err))
+		}
+
+		<-errHTTPCh
+		log.Println("HTTP server stopped")
+	}, errHTTPCh
+}
+
+func setupLogger(enableStdio *bool, logFile *string) func() {
+	if *logFile != "" {
+		f, err := os.OpenFile(*logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+		if err != nil {
+			panic(fmt.Errorf("failed to open log file: %w", err))
+		}
+		log.SetOutput(f)
+
+		return func() {
+			if err := f.Close(); err != nil {
+				log.Println(fmt.Errorf("f.Close failed: %w", err))
+			}
+		}
 	}
 
-	stdioCancel()
+	if *enableStdio {
+		log.SetOutput(io.Discard)
+	} else {
+		log.SetOutput(os.Stdout)
+	}
 
-	<-errStdioCh
-	<-errHTTPCh
+	return func() {}
 }
 
 func openBrowser(url string) {
@@ -173,43 +220,4 @@ func openBrowser(url string) {
 	if err != nil {
 		log.Printf("Could not open browser automatically: %v; please copy and open link in the browser: %s\n", err, url)
 	}
-}
-
-type responseWriter struct {
-	http.ResponseWriter
-	statusCode int
-}
-
-func (rw *responseWriter) WriteHeader(code int) {
-	rw.statusCode = code
-	rw.ResponseWriter.WriteHeader(code)
-}
-
-func loggingHandler(handler http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		start := time.Now()
-
-		// Create a response writer wrapper to capture status code.
-		wrapped := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
-
-		// Log request details.
-		log.Printf("[REQUEST] %s | %s | %s %s",
-			start.Format(time.RFC3339),
-			r.RemoteAddr,
-			r.Method,
-			r.URL.Path)
-
-		// Call the actual handler.
-		handler.ServeHTTP(wrapped, r)
-
-		// Log response details.
-		duration := time.Since(start)
-		log.Printf("[RESPONSE] %s | %s | %s %s | Status: %d | Duration: %v",
-			time.Now().Format(time.RFC3339),
-			r.RemoteAddr,
-			r.Method,
-			r.URL.Path,
-			wrapped.statusCode,
-			duration)
-	})
 }

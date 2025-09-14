@@ -12,14 +12,23 @@ Gmail MCP (Model Context Protocol) server that provides Gmail API access through
 # Build the server
 go build -o gmail-mcp ./cmd/gmail-mcp
 
-# Run the server (default HTTP on localhost:8081)
+# Run HTTP-only mode (logs to stdout, good for Docker/n8n)
 go run ./cmd/gmail-mcp/main.go
+
+# Run with stdio transport for Claude Desktop (discards logs)
+go run ./cmd/gmail-mcp/main.go -stdio
+
+# Run with stdio transport and file logging
+go run ./cmd/gmail-mcp/main.go -stdio -log-file=gmail-mcp.log
 
 # Run with custom parameters
 go run ./cmd/gmail-mcp/main.go \
   -http-addr="127.0.0.1:8081" \
   -oauth-token-file=".__gmail-mcp-token.json" \
-  -oauth-url="http://localhost:8081/oauth"
+  -oauth-url="http://localhost:8081/oauth" \
+  -env-file=".env.local" \
+  -stdio \
+  -log-file="gmail-mcp.log"
 
 # Install dependencies
 go mod download
@@ -27,6 +36,15 @@ go mod download
 # Update dependencies
 go mod tidy
 ```
+
+### CLI Flags
+
+- `-http-addr` - HTTP server listen address (default: "localhost:0", auto-assigns port)
+- `-oauth-token-file` - Path to cache OAuth token (default: ".__gmail-mcp-token.json")
+- `-oauth-url` - OAuth redirect URL (default: auto-generated from http-addr)
+- `-env-file` - Path to env file (default: ".env.local")
+- `-stdio` - Enable stdio transport for MCP (default: false)
+- `-log-file` - Log file path when stdio is enabled (default: "", discards logs)
 
 ## Required Environment Variables
 
@@ -62,21 +80,25 @@ Set these in `.env.local` or as environment variables:
   - `get_messages` - Returns full message with markdown-converted body
   - `preview_attachments` - Extracts text content from attachments
 
-### HTTP Server Structure
+### Transport Modes
 
-The server uses a single HTTP server for both OAuth and MCP:
-- OAuth endpoints handle Google authentication flow
-- MCP endpoint (`/mcp`) uses Streamable HTTP transport
-- Request/response logging middleware for debugging
-- Both services run on the same port (default 8081)
+The server supports two transport modes:
+- **HTTP Transport** (always enabled): Used with n8n, web clients, and OAuth flow
+  - Logs to stdout (ideal for Docker/docker-compose)
+  - OAuth endpoint: `/oauth`
+  - MCP endpoint: `/mcp`
+- **Stdio Transport** (optional via `-stdio` flag): Used with Claude Desktop
+  - Logs are discarded or written to file to avoid protocol interference
+  - Cannot log to stdout/stderr as it would break the MCP protocol
 
 ### Current MCP Implementation
 
 - Uses `github.com/modelcontextprotocol/go-sdk` v0.4.0
-- HTTP transport (Streamable HTTP, not SSE which is deprecated)
-- Transport handler: `mcp.NewStreamableHTTPHandler`
-- Compatible with LangChain agents and web-based MCP clients
-- No stdio transport implementation (HTTP only for simplicity)
+- Dual transport support:
+  - HTTP transport (always enabled): Streamable HTTP for n8n, web clients
+  - Stdio transport (optional): For Claude Desktop integration
+- Transport handler: `mcp.NewStreamableHTTPHandler` for HTTP
+- Compatible with Claude Desktop, n8n, LangChain agents, and web-based MCP clients
 
 ## Development Notes
 
