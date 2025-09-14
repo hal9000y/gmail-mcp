@@ -1,7 +1,9 @@
+// Package format provides document format conversion utilities.
 package format
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 )
@@ -11,20 +13,27 @@ const (
 	cmdPdfToHTML = "pdftohtml"
 )
 
+// Converter handles document format conversions.
 type Converter struct{}
 
+// PDF2MD converts PDF content to Markdown.
 func (c Converter) PDF2MD(raw []byte) (string, error) {
 	tmpPDF, err := os.CreateTemp("", "pdf-*.pdf")
 	if err != nil {
-		return "", fmt.Errorf("failed to create temp PDF file: %w", err)
+		return "", fmt.Errorf("os.CreateTemp failed: %w", err)
 	}
-	defer os.Remove(tmpPDF.Name())
+	defer func() {
+		if err := tmpPDF.Close(); err != nil {
+			log.Println(fmt.Errorf("tmpPDF.Close failed: %w", err))
+		}
+		if err := os.Remove(tmpPDF.Name()); err != nil {
+			log.Println(fmt.Errorf("os.Remove(%s) failed: %w", tmpPDF.Name(), err))
+		}
+	}()
 
 	if _, err := tmpPDF.Write(raw); err != nil {
-		tmpPDF.Close()
-		return "", fmt.Errorf("failed to write PDF data: %w", err)
+		return "", fmt.Errorf("tmpPDF.Write failed: %w", err)
 	}
-	tmpPDF.Close()
 
 	// Convert PDF to HTML using pdftohtml
 	// -s: generate single HTML page
@@ -41,18 +50,24 @@ func (c Converter) PDF2MD(raw []byte) (string, error) {
 	return c.HTML2MD(htmlOutput)
 }
 
+// HTML2MD converts HTML content to Markdown.
 func (c Converter) HTML2MD(raw []byte) (string, error) {
 	tmpHTML, err := os.CreateTemp("", "html-*.html")
 	if err != nil {
-		return "", fmt.Errorf("failed to create temp HTML file: %w", err)
+		return "", fmt.Errorf("os.CreateTemp failed: %w", err)
 	}
-	defer os.Remove(tmpHTML.Name())
+	defer func() {
+		if err := tmpHTML.Close(); err != nil {
+			log.Println(fmt.Errorf("tmpHTML.Close failed: %w", err))
+		}
+		if err := os.Remove(tmpHTML.Name()); err != nil {
+			log.Println(fmt.Errorf("os.Remove(%s) failed: %w", tmpHTML.Name(), err))
+		}
+	}()
 
 	if _, err := tmpHTML.Write(raw); err != nil {
-		tmpHTML.Close()
-		return "", fmt.Errorf("failed to write HTML data: %w", err)
+		return "", fmt.Errorf("tmpHTML.Write failed: %w", err)
 	}
-	tmpHTML.Close()
 
 	cmd := exec.Command(cmdPandoc, "-f", "html", "-t", "markdown", "--wrap=none", tmpHTML.Name())
 	output, err := cmd.Output()

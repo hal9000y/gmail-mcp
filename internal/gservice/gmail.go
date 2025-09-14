@@ -1,3 +1,4 @@
+// Package gservice provides a Gmail API facade for simplified email operations.
 package gservice
 
 import (
@@ -13,6 +14,7 @@ import (
 
 const gmailUserID = "me"
 
+// NewGmail creates a new Gmail service facade.
 func NewGmail(cfg *oauth2.Config, tok *auth.Token) *GMail {
 	return &GMail{
 		cfg: cfg,
@@ -20,11 +22,13 @@ func NewGmail(cfg *oauth2.Config, tok *auth.Token) *GMail {
 	}
 }
 
+// GMail provides simplified access to Gmail API operations.
 type GMail struct {
 	cfg *oauth2.Config
 	tok *auth.Token
 }
 
+// ListMessages searches for messages matching the query.
 func (m *GMail) ListMessages(ctx context.Context, Q, pageToken string, maxResults int64) (*gmail.ListMessagesResponse, error) {
 	svc, err := m.newSvc(ctx)
 	if err != nil {
@@ -44,6 +48,7 @@ func (m *GMail) ListMessages(ctx context.Context, Q, pageToken string, maxResult
 	return result, nil
 }
 
+// GetMessageMetadata retrieves message headers (From, To, Cc, Subject, Date).
 func (m *GMail) GetMessageMetadata(ctx context.Context, msgID string) (*gmail.Message, error) {
 	svc, err := m.newSvc(ctx)
 	if err != nil {
@@ -61,6 +66,7 @@ func (m *GMail) GetMessageMetadata(ctx context.Context, msgID string) (*gmail.Me
 	return msg, nil
 }
 
+// GetMessage retrieves a complete message including body and attachments.
 func (m *GMail) GetMessage(ctx context.Context, msgID string) (*gmail.Message, error) {
 	svc, err := m.newSvc(ctx)
 	if err != nil {
@@ -75,6 +81,7 @@ func (m *GMail) GetMessage(ctx context.Context, msgID string) (*gmail.Message, e
 	return msg, nil
 }
 
+// GetAttachment retrieves attachment content by message and attachment IDs.
 func (m *GMail) GetAttachment(ctx context.Context, msgID, attachmentID string) (*gmail.MessagePartBody, error) {
 	svc, err := m.newSvc(ctx)
 	if err != nil {

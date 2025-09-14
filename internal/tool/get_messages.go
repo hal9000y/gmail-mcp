@@ -9,20 +9,24 @@ import (
 	"google.golang.org/api/gmail/v1"
 )
 
+// GetMessagesRequest contains message IDs to retrieve.
 type GetMessagesRequest struct {
 	MessageIDs []string `json:"message_ids" jsonschema:"array of message IDs to retrieve"`
 }
 
+// GetMessagesResponse contains full message contents.
 type GetMessagesResponse struct {
 	Messages []MessageContent `json:"messages" jsonschema:"array of full message contents"`
 }
 
+// MessageContent contains complete message data with body and attachments.
 type MessageContent struct {
 	Summary     MessageSummary `json:"summary" jsonschema:"summary"`
 	BodyText    string         `json:"body_text,omitempty" jsonschema:"text body"`
 	Attachments []Attachment   `json:"attachments,omitempty" jsonschema:"list of attachments"`
 }
 
+// Attachment represents email attachment metadata.
 type Attachment struct {
 	ID       string `json:"id" jsonschema:"attachment ID"`
 	Filename string `json:"filename" jsonschema:"original filename"`
@@ -38,6 +42,7 @@ type htmlConverter interface {
 	HTML2MD(raw []byte) (string, error)
 }
 
+// NewGetMessages creates a new GetMessages tool.
 func NewGetMessages(svc getMessagesSvc, conv htmlConverter) *GetMessages {
 	return &GetMessages{
 		svc:  svc,
@@ -45,14 +50,16 @@ func NewGetMessages(svc getMessagesSvc, conv htmlConverter) *GetMessages {
 	}
 }
 
+// GetMessages retrieves full message content with converted bodies.
 type GetMessages struct {
 	svc  getMessagesSvc
 	conv htmlConverter
 }
 
+// GetMessages retrieves complete messages by their IDs.
 func (t *GetMessages) GetMessages(
 	ctx context.Context,
-	req *mcp.CallToolRequest,
+	_ *mcp.CallToolRequest,
 	input GetMessagesRequest,
 ) (*mcp.CallToolResult, GetMessagesResponse, error) {
 	messages := make([]MessageContent, 0, len(input.MessageIDs))
@@ -102,23 +109,16 @@ func (t *GetMessages) previewText(textBody, htmlBody string) (string, error) {
 }
 
 func extractMessageBodies(payload *gmail.MessagePart) (textBody, htmlBody string) {
-	if payload.Body != nil && payload.Body.Data != "" {
-		if payload.MimeType == "text/plain" {
-			textBody = decodeBase64URL(payload.Body.Data)
-		} else if payload.MimeType == "text/html" {
-			htmlBody = decodeBase64URL(payload.Body.Data)
-		}
-	}
+	textBody, htmlBody = extractBodyFromPart(payload)
 
 	for _, part := range payload.Parts {
-		if part.MimeType == "text/plain" && textBody == "" {
-			if part.Body != nil && part.Body.Data != "" {
-				textBody = decodeBase64URL(part.Body.Data)
-			}
-		} else if part.MimeType == "text/html" && htmlBody == "" {
-			if part.Body != nil && part.Body.Data != "" {
-				htmlBody = decodeBase64URL(part.Body.Data)
-			}
+		partText, partHTML := extractBodyFromPart(part)
+
+		if textBody == "" {
+			textBody = partText
+		}
+		if htmlBody == "" {
+			htmlBody = partHTML
 		}
 
 		if len(part.Parts) > 0 {
@@ -133,6 +133,21 @@ func extractMessageBodies(payload *gmail.MessagePart) (textBody, htmlBody string
 	}
 
 	return textBody, htmlBody
+}
+
+func extractBodyFromPart(part *gmail.MessagePart) (textBody, htmlBody string) {
+	if part.Body == nil || part.Body.Data == "" {
+		return "", ""
+	}
+
+	switch part.MimeType {
+	case "text/plain":
+		return decodeBase64URL(part.Body.Data), ""
+	case "text/html":
+		return "", decodeBase64URL(part.Body.Data)
+	default:
+		return "", ""
+	}
 }
 
 func decodeBase64URL(data string) string {

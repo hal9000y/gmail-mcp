@@ -1,3 +1,4 @@
+// Package auth handles OAuth2 token management and persistence.
 package auth
 
 import (
@@ -13,8 +14,10 @@ import (
 	"golang.org/x/oauth2"
 )
 
-var TokenNotSet = errors.New("no token defined")
+// ErrTokenNotSet indicates no OAuth token is available.
+var ErrTokenNotSet = errors.New("no token defined")
 
+// Token manages OAuth2 tokens with thread-safe operations.
 type Token struct {
 	mu          sync.RWMutex
 	cfg         *oauth2.Config
@@ -22,6 +25,7 @@ type Token struct {
 	persistPath string
 }
 
+// NewToken creates a Token manager, loading from disk if path provided.
 func NewToken(cfg *oauth2.Config, persistPath string) (*Token, error) {
 	t := &Token{cfg: cfg, persistPath: persistPath}
 	if persistPath == "" {
@@ -49,10 +53,12 @@ func NewToken(cfg *oauth2.Config, persistPath string) (*Token, error) {
 	return t, nil
 }
 
+// RedirectURL generates the OAuth2 authorization URL.
 func (t *Token) RedirectURL() string {
 	return t.cfg.AuthCodeURL("state-token", oauth2.AccessTypeOffline)
 }
 
+// AuthorizeCode exchanges an authorization code for an access token.
 func (t *Token) AuthorizeCode(ctx context.Context, code string) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -67,17 +73,19 @@ func (t *Token) AuthorizeCode(ctx context.Context, code string) error {
 	return nil
 }
 
+// OAuthToken returns the current OAuth2 token.
 func (t *Token) OAuthToken() (*oauth2.Token, error) {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 
 	if t.token == nil {
-		return nil, TokenNotSet
+		return nil, ErrTokenNotSet
 	}
 
 	return t.token, nil
 }
 
+// Persist saves the token to disk.
 func (t *Token) Persist() error {
 	t.mu.RLock()
 	defer t.mu.RUnlock()

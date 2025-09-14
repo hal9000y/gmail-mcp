@@ -17,10 +17,12 @@ type tok interface {
 	RedirectURL() string
 }
 
+// HTTPHandler handles OAuth2 authentication flow via HTTP.
 type HTTPHandler struct {
 	tok tok
 }
 
+// NewHTTPHandler creates an HTTP handler for OAuth2 flow.
 func NewHTTPHandler(tok tok) *HTTPHandler {
 	return &HTTPHandler{tok: tok}
 }
@@ -42,13 +44,13 @@ func (h *HTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	t, err := h.tok.OAuthToken()
-	if errors.Is(err, TokenNotSet) {
+	if errors.Is(err, ErrTokenNotSet) {
 		http.Error(w, "Token not found", http.StatusUnauthorized)
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprintf(w, "Token: %s, expires: %s", maskLeft(t.AccessToken), t.Expiry.Format(time.RFC3339))
+	_, _ = fmt.Fprintf(w, "Token: %s, expires: %s", maskLeft(t.AccessToken), t.Expiry.Format(time.RFC3339))
 }
 
 func maskLeft(s string) string {

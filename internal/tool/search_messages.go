@@ -1,3 +1,4 @@
+// Package tool implements MCP tools for Gmail operations.
 package tool
 
 import (
@@ -9,12 +10,14 @@ import (
 	"google.golang.org/api/gmail/v1"
 )
 
+// SearchMessagesRequest contains parameters for message search.
 type SearchMessagesRequest struct {
 	Query      string `json:"query" jsonschema:"the Gmail search query"`
 	MaxResults int64  `json:"max_results,omitempty" jsonschema:"max results per page"`
 	PageToken  string `json:"page_token,omitempty" jsonschema:"token for pagination"`
 }
 
+// SearchMessagesResponse contains search results with pagination.
 type SearchMessagesResponse struct {
 	Messages      []MessageSummary `json:"messages" jsonschema:"array of message summaries"`
 	NextPageToken string           `json:"next_page_token,omitempty" jsonschema:"token for next page"`
@@ -26,19 +29,22 @@ type searchMessagesSvc interface {
 	GetMessageMetadata(ctx context.Context, msgID string) (*gmail.Message, error)
 }
 
+// NewSearchMessages creates a new SearchMessages tool.
 func NewSearchMessages(svc searchMessagesSvc) *SearchMessages {
 	return &SearchMessages{
 		svc: svc,
 	}
 }
 
+// SearchMessages implements Gmail message search functionality.
 type SearchMessages struct {
 	svc searchMessagesSvc
 }
 
+// SearchMessages searches for Gmail messages matching the query.
 func (t *SearchMessages) SearchMessages(
 	ctx context.Context,
-	req *mcp.CallToolRequest,
+	_ *mcp.CallToolRequest,
 	input SearchMessagesRequest,
 ) (*mcp.CallToolResult, SearchMessagesResponse, error) {
 	input.MaxResults = normalizeMaxResults(input.MaxResults)

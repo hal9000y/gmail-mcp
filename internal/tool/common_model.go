@@ -1,10 +1,12 @@
 package tool
 
+// EmailAddress represents an email address with optional display name.
 type EmailAddress struct {
 	Name  string `json:"name,omitempty" jsonschema:"the display name"`
 	Email string `json:"email" jsonschema:"the email address"`
 }
 
+// MessageSummary contains essential message metadata.
 type MessageSummary struct {
 	ID        string         `json:"id" jsonschema:"message ID"`
 	ThreadID  string         `json:"thread_id" jsonschema:"thread ID"`

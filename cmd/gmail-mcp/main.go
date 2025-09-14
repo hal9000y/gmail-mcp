@@ -1,3 +1,4 @@
+// Gmail MCP server provides Gmail API access through Model Context Protocol.
 package main
 
 import (
@@ -38,44 +39,15 @@ func main() {
 
 	flag.Parse()
 
-	if httpAddr == nil || oauthTokenFile == nil {
-		panic("incomplete parameters provided")
-	}
-
 	persistLogs := setupLogger(enableStdio, logFile)
 	defer persistLogs()
 
-	if envFileParam != nil && *envFileParam != "" {
-		if err := godotenv.Load(*envFileParam); err != nil {
-			panic(fmt.Errorf("godotenv.Load failed: %w", err))
-		}
+	ln := mustListen(httpAddr)
+	config := mustCreateOauthCfg(ln.Addr().String(), envFileParam, oauthURLParam)
+
+	if oauthTokenFile == nil {
+		panic("-oauth-token-file must be provided")
 	}
-
-	oauthClientID := os.Getenv("OAUTH_GOOGLE_CLIENT_ID")
-	oauthClientSec := os.Getenv("OAUTH_GOOGLE_CLIENT_SECRET")
-
-	if oauthClientID == "" || oauthClientSec == "" {
-		panic("Env variables OAUTH_GOOGLE_CLIENT_ID and OAUTH_GOOGLE_CLIENT_SECRET must be set")
-	}
-
-	ln, err := net.Listen("tcp", *httpAddr)
-	if err != nil {
-		panic(fmt.Errorf("net.Listen failed: %w", err))
-	}
-
-	oauthURL := fmt.Sprintf("http://%s/oauth", ln.Addr().String())
-	if oauthURLParam != nil && *oauthURLParam != "" {
-		oauthURL = *oauthURLParam
-	}
-
-	config := &oauth2.Config{
-		ClientID:     oauthClientID,
-		ClientSecret: oauthClientSec,
-		RedirectURL:  oauthURL,
-		Scopes:       []string{gmail.GmailReadonlyScope},
-		Endpoint:     google.Endpoint,
-	}
-
 	tok, err := auth.NewToken(config, *oauthTokenFile)
 	if err != nil {
 		panic(fmt.Errorf("auth.NewToken failed: %w", err))
@@ -93,10 +65,9 @@ func main() {
 	mux := http.NewServeMux()
 	mux.Handle("/oauth", authHTTP)
 
-	conv := &format.Converter{}
 	gmailSvc := gservice.NewGmail(config, tok)
-	gmailT := tool.NewServer(gmailSvc, conv)
-	mcpHTTP := mcp.NewStreamableHTTPHandler(func(req *http.Request) *mcp.Server { return gmailT }, nil)
+	gmailT := tool.NewServer(gmailSvc, &format.Converter{})
+	mcpHTTP := mcp.NewStreamableHTTPHandler(func(_ *http.Request) *mcp.Server { return gmailT }, nil)
 
 	mux.Handle("/mcp", mcpHTTP)
 
@@ -108,8 +79,8 @@ func main() {
 
 	signal.Notify(shutdown, syscall.SIGTERM, syscall.SIGINT)
 
-	if _, err := tok.OAuthToken(); errors.Is(err, auth.TokenNotSet) {
-		openBrowser(oauthURL)
+	if _, err := tok.OAuthToken(); errors.Is(err, auth.ErrTokenNotSet) {
+		openBrowser(config.RedirectURL)
 	}
 
 	stopHTTP, errHTTPCh := serveHTTP(srv, ln)
@@ -178,6 +149,47 @@ func serveHTTP(srv *http.Server, ln net.Listener) (func(), <-chan error) {
 		<-errHTTPCh
 		log.Println("HTTP server stopped")
 	}, errHTTPCh
+}
+
+func mustListen(httpAddr *string) net.Listener {
+	if httpAddr == nil {
+		panic("-http-addr must be provided")
+	}
+
+	ln, err := net.Listen("tcp", *httpAddr)
+	if err != nil {
+		panic(fmt.Errorf("net.Listen failed: %w", err))
+	}
+
+	return ln
+}
+
+func mustCreateOauthCfg(lnAddr string, envFileParam, oauthURLParam *string) *oauth2.Config {
+	if envFileParam != nil && *envFileParam != "" {
+		if err := godotenv.Load(*envFileParam); err != nil {
+			panic(fmt.Errorf("godotenv.Load failed: %w", err))
+		}
+	}
+
+	oauthClientID := os.Getenv("OAUTH_GOOGLE_CLIENT_ID")
+	oauthClientSec := os.Getenv("OAUTH_GOOGLE_CLIENT_SECRET")
+
+	if oauthClientID == "" || oauthClientSec == "" {
+		panic("Env variables OAUTH_GOOGLE_CLIENT_ID and OAUTH_GOOGLE_CLIENT_SECRET must be set")
+	}
+
+	oauthURL := fmt.Sprintf("http://%s/oauth", lnAddr)
+	if oauthURLParam != nil && *oauthURLParam != "" {
+		oauthURL = *oauthURLParam
+	}
+
+	return &oauth2.Config{
+		ClientID:     oauthClientID,
+		ClientSecret: oauthClientSec,
+		RedirectURL:  oauthURL,
+		Scopes:       []string{gmail.GmailReadonlyScope},
+		Endpoint:     google.Endpoint,
+	}
 }
 
 func setupLogger(enableStdio *bool, logFile *string) func() {

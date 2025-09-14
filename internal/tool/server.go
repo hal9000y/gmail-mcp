@@ -15,6 +15,7 @@ type cnv interface {
 	pdfConverter
 }
 
+// NewServer creates an MCP server with Gmail tools.
 func NewServer(svc gmailSvc, cnv cnv) *mcp.Server {
 	server := mcp.NewServer(&mcp.Implementation{Name: "gmail-helper", Version: "v1.0.0"}, nil)
 

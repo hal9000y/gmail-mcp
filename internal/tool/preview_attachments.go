@@ -10,15 +10,18 @@ import (
 	"google.golang.org/api/gmail/v1"
 )
 
+// PreviewAttachmentsRequest specifies attachments to preview.
 type PreviewAttachmentsRequest struct {
 	MessageID     string   `json:"message_id" jsonschema:"message ID containing attachments"`
 	AttachmentIDs []string `json:"attachment_ids" jsonschema:"array of attachment IDs (Part IDs)"`
 }
 
+// PreviewAttachmentsResponse contains extracted attachment content.
 type PreviewAttachmentsResponse struct {
 	Attachments []AttachmentPreview `json:"attachments" jsonschema:"array of attachment previews"`
 }
 
+// AttachmentPreview contains extracted text from an attachment.
 type AttachmentPreview struct {
 	ID       string `json:"id" jsonschema:"attachment ID (Part ID)"`
 	Filename string `json:"filename" jsonschema:"original filename"`
@@ -36,6 +39,7 @@ type pdfConverter interface {
 	PDF2MD(raw []byte) (string, error)
 }
 
+// NewPreviewAttachments creates a new PreviewAttachments tool.
 func NewPreviewAttachments(svc previewAttachmentsSvc, conv pdfConverter) *PreviewAttachments {
 	return &PreviewAttachments{
 		svc:  svc,
@@ -43,14 +47,16 @@ func NewPreviewAttachments(svc previewAttachmentsSvc, conv pdfConverter) *Previe
 	}
 }
 
+// PreviewAttachments extracts text content from email attachments.
 type PreviewAttachments struct {
 	svc  previewAttachmentsSvc
 	conv pdfConverter
 }
 
+// PreviewAttachments extracts text from specified attachments.
 func (t *PreviewAttachments) PreviewAttachments(
 	ctx context.Context,
-	req *mcp.CallToolRequest,
+	_ *mcp.CallToolRequest,
 	input PreviewAttachmentsRequest,
 ) (*mcp.CallToolResult, PreviewAttachmentsResponse, error) {
 	msg, err := t.svc.GetMessage(ctx, input.MessageID)
@@ -64,7 +70,7 @@ func (t *PreviewAttachments) PreviewAttachments(
 		content := findAttachmentMetadata(msg.Payload, partID)
 
 		if content.Body == nil || content.Body.AttachmentId == "" {
-			return nil, PreviewAttachmentsResponse{}, fmt.Errorf("No attachmentID found for %s/%s", input.MessageID, partID)
+			return nil, PreviewAttachmentsResponse{}, fmt.Errorf("no attachmentID found for %s/%s", input.MessageID, partID)
 		}
 		attachID := content.Body.AttachmentId
 		fileName := content.Filename
