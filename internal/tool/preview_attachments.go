@@ -8,8 +8,6 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"google.golang.org/api/gmail/v1"
-
-	"github.com/hal9000y/gmail-mcp/internal/gservice"
 )
 
 type PreviewAttachmentsRequest struct {
@@ -29,17 +27,33 @@ type AttachmentPreview struct {
 	Error    string `json:"error,omitempty" jsonschema:"error if extraction failed"`
 }
 
-func (h *GmailHandler) PreviewAttachments(
+type previewAttachmentsSvc interface {
+	GetMessage(ctx context.Context, msgID string) (*gmail.Message, error)
+	GetAttachment(ctx context.Context, msgID, attachmentID string) (*gmail.MessagePartBody, error)
+}
+
+type pdfConverter interface {
+	PDF2MD(raw []byte) (string, error)
+}
+
+func NewPreviewAttachments(svc previewAttachmentsSvc, conv pdfConverter) *PreviewAttachments {
+	return &PreviewAttachments{
+		svc:  svc,
+		conv: conv,
+	}
+}
+
+type PreviewAttachments struct {
+	svc  previewAttachmentsSvc
+	conv pdfConverter
+}
+
+func (t *PreviewAttachments) PreviewAttachments(
 	ctx context.Context,
 	req *mcp.CallToolRequest,
 	input PreviewAttachmentsRequest,
 ) (*mcp.CallToolResult, PreviewAttachmentsResponse, error) {
-	srv, err := gservice.NewGmail(ctx, h.cfg, h.tok)
-	if err != nil {
-		return nil, PreviewAttachmentsResponse{}, fmt.Errorf("gservice.NewGmail failed: %w", err)
-	}
-
-	msg, err := srv.Users.Messages.Get(gmailUserID, input.MessageID).Do()
+	msg, err := t.svc.GetMessage(ctx, input.MessageID)
 	if err != nil {
 		return nil, PreviewAttachmentsResponse{}, fmt.Errorf("get message failed: %w", err)
 	}
@@ -56,7 +70,7 @@ func (h *GmailHandler) PreviewAttachments(
 		fileName := content.Filename
 		mimeType := content.MimeType
 
-		attachment, err := srv.Users.Messages.Attachments.Get(gmailUserID, input.MessageID, attachID).Do()
+		attachment, err := t.svc.GetAttachment(ctx, input.MessageID, attachID)
 		if err != nil {
 			return nil, PreviewAttachmentsResponse{}, fmt.Errorf("get attachment %s failed: %w", attachID, err)
 		}
@@ -67,7 +81,7 @@ func (h *GmailHandler) PreviewAttachments(
 			MimeType: mimeType,
 		}
 
-		data, err := h.extractAttachmentContent(attachment.Data, preview.MimeType, preview.Filename)
+		data, err := t.extractAttachmentContent(attachment.Data, preview.MimeType, preview.Filename)
 		if err != nil {
 			preview.Error = err.Error()
 		} else {
@@ -96,7 +110,7 @@ func findAttachmentMetadata(payload *gmail.MessagePart, partID string) *gmail.Me
 	return nil
 }
 
-func (h *GmailHandler) extractAttachmentContent(data, mimeType, filename string) (string, error) {
+func (t *PreviewAttachments) extractAttachmentContent(data, mimeType, filename string) (string, error) {
 	decodedData, err := base64.URLEncoding.DecodeString(data)
 	if err != nil {
 		decodedData, err = base64.RawURLEncoding.DecodeString(data)
@@ -110,7 +124,7 @@ func (h *GmailHandler) extractAttachmentContent(data, mimeType, filename string)
 		return string(decodedData), nil
 
 	case mimeType == "application/pdf":
-		return h.conv.PDF2MD(decodedData)
+		return t.conv.PDF2MD(decodedData)
 
 	case strings.HasSuffix(filename, ".txt") || strings.HasSuffix(filename, ".md"):
 		return string(decodedData), nil

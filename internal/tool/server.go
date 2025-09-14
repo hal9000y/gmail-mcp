@@ -2,61 +2,36 @@ package tool
 
 import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"golang.org/x/oauth2"
-
-	"github.com/hal9000y/gmail-mcp/internal/auth"
 )
 
-const gmailUserID = "me"
-
-type converter interface {
-	PDF2MD([]byte) (string, error)
-	HTML2MD([]byte) (string, error)
+type gmailSvc interface {
+	getMessagesSvc
+	searchMessagesSvc
+	previewAttachmentsSvc
 }
 
-type GmailHandler struct {
-	conv converter
-	cfg  *oauth2.Config
-	tok  *auth.Token
+type cnv interface {
+	htmlConverter
+	pdfConverter
 }
 
-func NewGmailHandler(conv converter, cfg *oauth2.Config, tok *auth.Token) *GmailHandler {
-	return &GmailHandler{conv: conv, cfg: cfg, tok: tok}
-}
-
-func NewGmailToolSet(h *GmailHandler) *mcp.Server {
+func NewServer(svc gmailSvc, cnv cnv) *mcp.Server {
 	server := mcp.NewServer(&mcp.Implementation{Name: "gmail-helper", Version: "v1.0.0"}, nil)
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "search_messages",
 		Description: "Search Gmail messages using Gmail search syntax",
-	}, h.SearchMessages)
+	}, NewSearchMessages(svc).SearchMessages)
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "get_messages",
 		Description: "Get full message content for specified message IDs",
-	}, h.GetMessages)
+	}, NewGetMessages(svc, cnv).GetMessages)
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "preview_attachments",
 		Description: "Extract text content from attachments (PDFs, text files, etc)",
-	}, h.PreviewAttachments)
+	}, NewPreviewAttachments(svc, cnv).PreviewAttachments)
 
 	return server
-}
-
-type EmailAddress struct {
-	Name  string `json:"name,omitempty" jsonschema:"the display name"`
-	Email string `json:"email" jsonschema:"the email address"`
-}
-
-type MessageSummary struct {
-	ID        string         `json:"id" jsonschema:"message ID"`
-	ThreadID  string         `json:"thread_id" jsonschema:"thread ID"`
-	Timestamp string         `json:"timestamp" jsonschema:"message timestamp"`
-	From      EmailAddress   `json:"from" jsonschema:"sender information"`
-	To        []EmailAddress `json:"to,omitempty" jsonschema:"recipients"`
-	CC        []EmailAddress `json:"cc,omitempty" jsonschema:"CC recipients"`
-	Subject   string         `json:"subject" jsonschema:"email subject"`
-	Snippet   string         `json:"snippet" jsonschema:"message preview"`
 }

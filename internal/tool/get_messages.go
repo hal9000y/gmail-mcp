@@ -7,11 +7,8 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"google.golang.org/api/gmail/v1"
-
-	"github.com/hal9000y/gmail-mcp/internal/gservice"
 )
 
-// GetMessages - Returns full message content with bodies converted to markdown
 type GetMessagesRequest struct {
 	MessageIDs []string `json:"message_ids" jsonschema:"array of message IDs to retrieve"`
 }
@@ -33,20 +30,35 @@ type Attachment struct {
 	Size     int64  `json:"size" jsonschema:"size in bytes"`
 }
 
-func (h *GmailHandler) GetMessages(
+type getMessagesSvc interface {
+	GetMessage(ctx context.Context, msgID string) (*gmail.Message, error)
+}
+
+type htmlConverter interface {
+	HTML2MD(raw []byte) (string, error)
+}
+
+func NewGetMessages(svc getMessagesSvc, conv htmlConverter) *GetMessages {
+	return &GetMessages{
+		svc:  svc,
+		conv: conv,
+	}
+}
+
+type GetMessages struct {
+	svc  getMessagesSvc
+	conv htmlConverter
+}
+
+func (t *GetMessages) GetMessages(
 	ctx context.Context,
 	req *mcp.CallToolRequest,
 	input GetMessagesRequest,
 ) (*mcp.CallToolResult, GetMessagesResponse, error) {
-	srv, err := gservice.NewGmail(ctx, h.cfg, h.tok)
-	if err != nil {
-		return nil, GetMessagesResponse{}, fmt.Errorf("gservice.NewGmail failed: %w", err)
-	}
-
 	messages := make([]MessageContent, 0, len(input.MessageIDs))
 
 	for _, msgID := range input.MessageIDs {
-		msg, err := srv.Users.Messages.Get(gmailUserID, msgID).Do()
+		msg, err := t.svc.GetMessage(ctx, msgID)
 		if err != nil {
 			return nil, GetMessagesResponse{}, fmt.Errorf("get message %s failed: %w", msgID, err)
 		}
@@ -59,7 +71,7 @@ func (h *GmailHandler) GetMessages(
 			content.Attachments = extractAttachments(msg.Payload)
 
 			textBody, htmlBody := extractMessageBodies(msg.Payload)
-			content.BodyText, err = h.previewText(textBody, htmlBody)
+			content.BodyText, err = t.previewText(textBody, htmlBody)
 			if err != nil {
 				return nil, GetMessagesResponse{}, fmt.Errorf("previewText failed: %w", err)
 			}
@@ -73,7 +85,7 @@ func (h *GmailHandler) GetMessages(
 	}, nil
 }
 
-func (h *GmailHandler) previewText(textBody, htmlBody string) (string, error) {
+func (t *GetMessages) previewText(textBody, htmlBody string) (string, error) {
 	if textBody != "" {
 		return textBody, nil
 	}
@@ -81,7 +93,7 @@ func (h *GmailHandler) previewText(textBody, htmlBody string) (string, error) {
 		return "", nil
 	}
 
-	converted, err := h.conv.HTML2MD([]byte(htmlBody))
+	converted, err := t.conv.HTML2MD([]byte(htmlBody))
 	if err != nil {
 		return "", fmt.Errorf("conv.HTML2MD failed: %w", err)
 	}

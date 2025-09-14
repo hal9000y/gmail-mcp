@@ -7,11 +7,8 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"google.golang.org/api/gmail/v1"
-
-	"github.com/hal9000y/gmail-mcp/internal/gservice"
 )
 
-// SearchMessages - Returns minimal message metadata to preserve context
 type SearchMessagesRequest struct {
 	Query      string `json:"query" jsonschema:"the Gmail search query"`
 	MaxResults int64  `json:"max_results,omitempty" jsonschema:"max results per page"`
@@ -24,35 +21,37 @@ type SearchMessagesResponse struct {
 	TotalResults  int              `json:"total_results" jsonschema:"number of messages returned"`
 }
 
-func (h *GmailHandler) SearchMessages(
+type searchMessagesSvc interface {
+	ListMessages(ctx context.Context, Q, pageToken string, maxResults int64) (*gmail.ListMessagesResponse, error)
+	GetMessageMetadata(ctx context.Context, msgID string) (*gmail.Message, error)
+}
+
+func NewSearchMessages(svc searchMessagesSvc) *SearchMessages {
+	return &SearchMessages{
+		svc: svc,
+	}
+}
+
+type SearchMessages struct {
+	svc searchMessagesSvc
+}
+
+func (t *SearchMessages) SearchMessages(
 	ctx context.Context,
 	req *mcp.CallToolRequest,
 	input SearchMessagesRequest,
 ) (*mcp.CallToolResult, SearchMessagesResponse, error) {
-	srv, err := gservice.NewGmail(ctx, h.cfg, h.tok)
-	if err != nil {
-		return nil, SearchMessagesResponse{}, fmt.Errorf("gservice.NewGmail failed: %w", err)
-	}
-
 	input.MaxResults = normalizeMaxResults(input.MaxResults)
 
-	call := srv.Users.Messages.List(gmailUserID).
-		Q(input.Query).
-		PageToken(input.PageToken).
-		MaxResults(input.MaxResults)
-
-	result, err := call.Do()
+	result, err := t.svc.ListMessages(ctx, input.Query, input.PageToken, input.MaxResults)
 	if err != nil {
-		return nil, SearchMessagesResponse{}, fmt.Errorf("list messages failed: %w", err)
+		return nil, SearchMessagesResponse{}, fmt.Errorf("svc.ListMessages failed: %w", err)
 	}
 
 	messages := make([]MessageSummary, 0, len(result.Messages))
 
 	for _, m := range result.Messages {
-		msg, err := srv.Users.Messages.Get(gmailUserID, m.Id).
-			Format("METADATA").
-			MetadataHeaders("From", "To", "Cc", "Subject", "Date").
-			Do()
+		msg, err := t.svc.GetMessageMetadata(ctx, m.Id)
 		if err != nil {
 			return nil, SearchMessagesResponse{}, fmt.Errorf("get message %s failed: %w", m.Id, err)
 		}
