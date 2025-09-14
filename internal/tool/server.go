@@ -4,19 +4,21 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+//go:generate moq -rm -pkg tool_test -out moq_gmail_svc_test.go -skip-ensure . gmailSvc:gmailSvcMock
 type gmailSvc interface {
 	getMessagesSvc
 	searchMessagesSvc
 	previewAttachmentsSvc
 }
 
-type cnv interface {
+//go:generate moq -rm -pkg tool_test -out moq_converter_test.go -skip-ensure . converter:converterMock
+type converter interface {
 	htmlConverter
 	pdfConverter
 }
 
 // NewServer creates an MCP server with Gmail tools.
-func NewServer(svc gmailSvc, cnv cnv) *mcp.Server {
+func NewServer(svc gmailSvc, cnv converter) *mcp.Server {
 	server := mcp.NewServer(&mcp.Implementation{Name: "gmail-helper", Version: "v1.0.0"}, nil)
 
 	mcp.AddTool(server, &mcp.Tool{
