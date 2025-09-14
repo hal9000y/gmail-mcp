@@ -21,7 +21,7 @@ func newPreviewAttachmentsGmailSvc() *gmailSvcMock {
 				return nil, fmt.Errorf("message not found: %s", msgID)
 			}
 			return &gmail.Message{
-				Id:      msgID,
+				Id: msgID,
 				Payload: &gmail.MessagePart{
 					Parts: []*gmail.MessagePart{
 						{
@@ -107,7 +107,7 @@ func TestPreviewAttachments(t *testing.T) {
 
 	gmailSvc := newPreviewAttachmentsGmailSvc()
 	converter := &converterMock{
-		PDF2MDFunc: func(raw []byte) (string, error) {
+		PDF2MDFunc: func(_ []byte) (string, error) {
 			return "**PDF converted to markdown**", nil
 		},
 	}
@@ -119,12 +119,12 @@ func TestPreviewAttachments(t *testing.T) {
 	ctx := context.Background()
 
 	serverSession, err := server.Connect(ctx, serverTransport, nil)
-	defer serverSession.Close()
 	require.NoError(t, err)
+	defer serverSession.Close()
 
 	clientSession, err := client.Connect(ctx, clientTransport, nil)
-	defer clientSession.Close()
 	require.NoError(t, err)
+	defer clientSession.Close()
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

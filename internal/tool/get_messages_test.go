@@ -104,7 +104,7 @@ func TestGetMessages(t *testing.T) {
 
 	gmailSvc := newGetMessagesGmailSvc()
 	converter := &converterMock{
-		HTML2MDFunc: func(raw []byte) (string, error) {
+		HTML2MDFunc: func(_ []byte) (string, error) {
 			return "**Converted from HTML**", nil
 		},
 	}
@@ -116,12 +116,12 @@ func TestGetMessages(t *testing.T) {
 	ctx := context.Background()
 
 	serverSession, err := server.Connect(ctx, serverTransport, nil)
-	defer serverSession.Close()
 	require.NoError(t, err)
+	defer serverSession.Close()
 
 	clientSession, err := client.Connect(ctx, clientTransport, nil)
-	defer clientSession.Close()
 	require.NoError(t, err)
+	defer clientSession.Close()
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

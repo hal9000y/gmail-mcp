@@ -18,8 +18,8 @@ func newSearchMessagesGmailSvc(byQuery map[string]*gmail.ListMessagesResponse) *
 	return &gmailSvcMock{
 		ListMessagesFunc: func(
 			_ context.Context,
-			Q, pageToken string,
-			maxResults int64) (*gmail.ListMessagesResponse, error) {
+			Q, _ string,
+			_ int64) (*gmail.ListMessagesResponse, error) {
 			res, ok := byQuery[Q]
 			if !ok {
 				return nil, fmt.Errorf("simulated error: %s", Q)
@@ -100,12 +100,12 @@ func TestSearchMessages(t *testing.T) {
 	ctx := context.Background()
 
 	serverSession, err := server.Connect(ctx, serverTransport, nil)
-	defer serverSession.Close()
 	require.NoError(t, err)
+	defer serverSession.Close()
 
 	clientSession, err := client.Connect(ctx, clientTransport, nil)
-	defer clientSession.Close()
 	require.NoError(t, err)
+	defer clientSession.Close()
 
 	for _, tc := range cases {
 		t.Run(tc.req.Query, func(t *testing.T) {

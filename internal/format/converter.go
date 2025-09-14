@@ -38,7 +38,7 @@ func (c Converter) PDF2MD(raw []byte) (string, error) {
 	// Convert PDF to HTML using pdftohtml
 	// -s: generate single HTML page
 	// -i: ignore images
-	// -noframes: single file output  
+	// -noframes: single file output
 	// -stdout: output to stdout
 	cmd := exec.Command(cmdPdfToHTML, "-s", "-i", "-noframes", "-stdout", tmpPDF.Name())
 	htmlOutput, err := cmd.Output()
