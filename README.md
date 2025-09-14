@@ -11,9 +11,12 @@ A simple read-only Gmail MCP (Model Context Protocol) server that provides Gmail
 
 ## Prerequisites
 
-- Go 1.25.0 or later
+- Go 1.21+
 - Google Cloud project with Gmail API enabled
 - OAuth2 credentials (Client ID and Secret)
+- Document converters (for attachments):
+  - `pandoc` - HTML to Markdown conversion
+  - `pdftohtml` - PDF text extraction
 
 ## Setup
 
@@ -42,13 +45,36 @@ The server will:
 
 ### Available MCP Tools
 
-- `search_emails` - Search Gmail messages with query parameters
+- `search_messages` - Search Gmail messages using Gmail search syntax
+- `get_messages` - Retrieve full message content with bodies converted to Markdown
+- `preview_attachments` - Extract text content from email attachments (text, PDF)
 
 ## Architecture
 
 - `/oauth` - Handles Google OAuth2 flow
 - `/mcp` - MCP protocol endpoint (streamable HTTP)
 - Token caching in `.__gmail-mcp-token.json` (auto-generated, gitignored)
+- Dual transport support: HTTP (default) and stdio (for Claude Desktop)
+
+## Development
+
+### Running Tests
+```bash
+# Run all tests
+go test ./internal/tool -v
+
+# Run specific test
+go test ./internal/tool -run TestSearchMessages -v
+```
+
+### Code Quality
+```bash
+# Run linters
+golangci-lint run
+
+# Generate mocks for testing
+go generate ./...
+```
 
 ## References
 

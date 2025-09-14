@@ -118,9 +118,18 @@ The server supports two transport modes:
   - `pdfConverter`: `PDF2MD`
 
 ### Testing Approach
-- Unit tests: Mock the service interfaces for each tool
-- Integration tests: Use Google's test API or local Gmail test account
-- No test files currently exist - implement as needed
+- **Unit tests implemented** using MCP in-memory transport for full protocol testing
+- Mock generation via `go:generate moq` directives in `server.go`
+- Test pattern:
+  - Minimal interface mocking (only required methods)
+  - Dynamic data generation using IDs in mock responses
+  - Direct type assertion for `*mcp.TextContent` to access results
+  - Error handling via `IsError` flag, not RPC failures
+
+### Test Files
+- `search_messages_test.go` - Tests message search with pagination
+- `get_messages_test.go` - Tests full message retrieval with body extraction
+- `preview_attachments_test.go` - Tests attachment content extraction
 
 ## Development Notes
 
@@ -154,6 +163,16 @@ Run linters:
 ```bash
 golangci-lint run
 ```
+
+### Testing
+Run all tests:
+```bash
+go test ./internal/tool -v
+```
+
+Generate mocks (requires moq):
+```bash
+go generate ./...
 
 ### Error Handling
 - All errors are handled or explicitly ignored with `_`
