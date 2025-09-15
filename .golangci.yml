@@ -20,4 +20,5 @@ formatters:
     - goimports
   settings:
     goimports:
-      local-prefixes: github.com/hal9000y/gmail-mcp
+      local-prefixes:
+        - github.com/hal9000y/gmail-mcp
