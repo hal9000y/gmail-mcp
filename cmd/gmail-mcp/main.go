@@ -31,9 +31,9 @@ import (
 
 func main() {
 	httpAddr := flag.String("http-addr", "localhost:0", "HTTP SERVER listen addr")
-	oauthTokenFile := flag.String("oauth-token-file", ".__gmail-mcp-token.json", "Path to cache google oauth token, empty to avoid storing")
+	oauthTokenFile := flag.String("oauth-token-file", "./data/gmail-mcp-token.json", "Path to cache google oauth token, empty to avoid storing")
 	oauthURLParam := flag.String("oauth-url", "", "OAuth URL")
-	envFileParam := flag.String("env-file", ".env.local", "Path to env file")
+	envFileParam := flag.String("env-file", "", "Path to env file")
 	enableStdio := flag.Bool("stdio", false, "Enable stdio transport for MCP (disables stdout logging)")
 	logFile := flag.String("log-file", "", "Path to log file (only used with stdio transport, otherwise logs to stdout)")
 

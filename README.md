@@ -31,10 +31,10 @@ OAUTH_GOOGLE_CLIENT_SECRET=your_client_secret_here
 
 ## Usage
 
-Run the server:
+### Running with Go
 
 ```bash
-go run ./cmd/gmail-mcp/main.go
+go run -v ./cmd/gmail-mcp/main.go --env-file ./.env.local
 ```
 
 The server will:
@@ -42,6 +42,82 @@ The server will:
 - Automatically open browser for OAuth authentication on first run
 - Cache the token locally for subsequent runs
 - Expose MCP endpoint at `/mcp`
+
+### Running from Binary
+
+Build and run:
+```bash
+# Build the binary
+go build -o gmail-mcp ./cmd/gmail-mcp
+
+# Create config directory and data folder
+mkdir -p ~/.config/gmail-mcp/data
+
+# Create .env.local file (remove quotes from values)
+cat > ~/.config/gmail-mcp/.env.local << EOF
+OAUTH_GOOGLE_CLIENT_ID=your_client_id_here
+OAUTH_GOOGLE_CLIENT_SECRET=your_client_secret_here
+EOF
+
+# Run the binary
+./gmail-mcp -stdio \
+  -env-file ~/.config/gmail-mcp/.env.local \
+  -oauth-token-file ~/.config/gmail-mcp/data/gmail-mcp-token.json \
+  -log-file ~/.config/gmail-mcp/data/gmail-mcp.log
+```
+
+### Using with Claude Code
+
+Install the gmail-mcp binary as an MCP server in Claude Code:
+
+```bash
+# Build the binary first
+go build -o gmail-mcp ./cmd/gmail-mcp
+
+# Add to Claude Code as MCP server
+claude mcp add gmail-mcp -- gmail-mcp -stdio \
+  -env-file ~/.config/gmail-mcp/.env.local \
+  -oauth-token-file ~/.config/gmail-mcp/data/gmail-mcp-token.json \
+  -log-file ~/.config/gmail-mcp/data/gmail-mcp.log
+```
+
+This command:
+- Registers `gmail-mcp` as an MCP server in Claude Code
+- Uses stdio transport (`-stdio`) for Claude Desktop compatibility
+- Stores configuration in `~/.config/gmail-mcp/.env.local`
+- Caches OAuth token in `~/.config/gmail-mcp/data/gmail-mcp-token.json`
+- Logs to `~/.config/gmail-mcp/data/gmail-mcp.log` (required when using stdio)
+
+### Running with Docker
+
+Setup and build:
+```bash
+# Create config directory and data folder
+mkdir -p ~/.config/gmail-mcp/data
+
+# Create .env.local file (remove quotes from values)
+cat > ~/.config/gmail-mcp/.env.local << EOF
+OAUTH_GOOGLE_CLIENT_ID=your_client_id_here
+OAUTH_GOOGLE_CLIENT_SECRET=your_client_secret_here
+EOF
+
+# Build the Docker image
+docker build -t gmail-mcp:latest .
+```
+
+Run the container:
+```bash
+docker run -it --rm \
+  -v ~/.config/gmail-mcp/data:/data \
+  --env-file ~/.config/gmail-mcp/.env.local \
+  -p 127.0.0.1:3000:3000 \
+  gmail-mcp:latest
+```
+
+**IMPORTANT**: When running with Docker, you must manually open the OAuth URL in your browser:
+```
+http://127.0.0.1:3000/oauth?redirect=1
+```
 
 ### Available MCP Tools
 
