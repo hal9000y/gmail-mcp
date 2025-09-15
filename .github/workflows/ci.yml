@@ -37,7 +37,7 @@ jobs:
           cache: true
 
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y pandoc poppler-utils
+        run: sudo apt-get install -y pandoc poppler-utils
 
       - name: Run tests
         run: go test -v -race ./...
@@ -45,10 +45,6 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        goos: [linux, darwin]
-        goarch: [amd64, arm64]
     steps:
       - uses: actions/checkout@v5
 
@@ -59,7 +55,4 @@ jobs:
           cache: true
 
       - name: Build
-        env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-        run: go build -v -o gmail-mcp-${{ matrix.goos }}-${{ matrix.goarch }} ./cmd/gmail-mcp
+        run: go build -v ./cmd/gmail-mcp
