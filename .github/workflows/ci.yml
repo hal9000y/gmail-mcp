@@ -14,8 +14,14 @@ jobs:
   build-test-image:
     name: Build Test Image
     runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.image.outputs.image }}
     steps:
       - uses: actions/checkout@v5
+
+      - name: Set image output
+        id: image
+        run: echo "image=${{ env.CI_IMAGE_REPO }}:${{ env.CI_IMAGE_VERSION }}" >> $GITHUB_OUTPUT
 
       - name: Check version cache
         id: cache-version
@@ -73,7 +79,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: build-test-image
     container:
-      image: ${{ env.CI_IMAGE_REPO }}:${{ env.CI_IMAGE_VERSION }}
+      image: ${{ needs.build-test-image.outputs.image }}
     steps:
       - uses: actions/checkout@v5
 
