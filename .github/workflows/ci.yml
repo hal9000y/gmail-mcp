@@ -7,7 +7,7 @@ on:
     branches: [ master, main ]
 
 env:
-  CI_IMAGE_VERSION: v2
+  CI_IMAGE_VERSION: v4
   CI_IMAGE_REPO: ghcr.io/${{ github.repository_owner }}/gmail-mcp-ci
 
 jobs:
@@ -87,7 +87,7 @@ jobs:
       - uses: actions/checkout@v5
 
       - name: Run tests
-        run: go test -v -race ./...
+        run: go test -mod=vendor -v -race ./...
 
   build:
     name: Build
@@ -102,4 +102,4 @@ jobs:
           cache: true
 
       - name: Build
-        run: go build -v ./cmd/gmail-mcp
+        run: go build -mod=vendor -v ./cmd/gmail-mcp
