@@ -9,8 +9,8 @@ import (
 )
 
 const (
-	cmdPdfToText = "pdftotext"
 	cmdPandoc    = "pandoc"
+	cmdPdfToText = "pdftotext"
 )
 
 // Converter handles document format conversions.
