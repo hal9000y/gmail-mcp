@@ -7,7 +7,7 @@ on:
     branches: [ master, main ]
 
 env:
-  CI_IMAGE_VERSION: v1
+  CI_IMAGE_VERSION: v2
   CI_IMAGE_REPO: ghcr.io/${{ github.repository_owner }}/gmail-mcp-ci
 
 jobs:

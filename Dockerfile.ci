@@ -1,5 +1,5 @@
-# CI Image Version: v1
-FROM golang:1.25-bookworm
+# CI Image Version: v2
+FROM golang:1.25-trixie
 
 # Install test dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
