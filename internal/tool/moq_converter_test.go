@@ -16,8 +16,8 @@ import (
 //			HTML2MDFunc: func(raw []byte) (string, error) {
 //				panic("mock out the HTML2MD method")
 //			},
-//			PDF2MDFunc: func(raw []byte) (string, error) {
-//				panic("mock out the PDF2MD method")
+//			PDF2TextFunc: func(raw []byte) (string, error) {
+//				panic("mock out the PDF2Text method")
 //			},
 //		}
 //
@@ -29,8 +29,8 @@ type converterMock struct {
 	// HTML2MDFunc mocks the HTML2MD method.
 	HTML2MDFunc func(raw []byte) (string, error)
 
-	// PDF2MDFunc mocks the PDF2MD method.
-	PDF2MDFunc func(raw []byte) (string, error)
+	// PDF2TextFunc mocks the PDF2Text method.
+	PDF2TextFunc func(raw []byte) (string, error)
 
 	// calls tracks calls to the methods.
 	calls struct {
@@ -39,14 +39,14 @@ type converterMock struct {
 			// Raw is the raw argument value.
 			Raw []byte
 		}
-		// PDF2MD holds details about calls to the PDF2MD method.
-		PDF2MD []struct {
+		// PDF2Text holds details about calls to the PDF2Text method.
+		PDF2Text []struct {
 			// Raw is the raw argument value.
 			Raw []byte
 		}
 	}
-	lockHTML2MD sync.RWMutex
-	lockPDF2MD  sync.RWMutex
+	lockHTML2MD  sync.RWMutex
+	lockPDF2Text sync.RWMutex
 }
 
 // HTML2MD calls HTML2MDFunc.
@@ -81,34 +81,34 @@ func (mock *converterMock) HTML2MDCalls() []struct {
 	return calls
 }
 
-// PDF2MD calls PDF2MDFunc.
-func (mock *converterMock) PDF2MD(raw []byte) (string, error) {
-	if mock.PDF2MDFunc == nil {
-		panic("converterMock.PDF2MDFunc: method is nil but converter.PDF2MD was just called")
+// PDF2Text calls PDF2TextFunc.
+func (mock *converterMock) PDF2Text(raw []byte) (string, error) {
+	if mock.PDF2TextFunc == nil {
+		panic("converterMock.PDF2TextFunc: method is nil but converter.PDF2Text was just called")
 	}
 	callInfo := struct {
 		Raw []byte
 	}{
 		Raw: raw,
 	}
-	mock.lockPDF2MD.Lock()
-	mock.calls.PDF2MD = append(mock.calls.PDF2MD, callInfo)
-	mock.lockPDF2MD.Unlock()
-	return mock.PDF2MDFunc(raw)
+	mock.lockPDF2Text.Lock()
+	mock.calls.PDF2Text = append(mock.calls.PDF2Text, callInfo)
+	mock.lockPDF2Text.Unlock()
+	return mock.PDF2TextFunc(raw)
 }
 
-// PDF2MDCalls gets all the calls that were made to PDF2MD.
+// PDF2TextCalls gets all the calls that were made to PDF2Text.
 // Check the length with:
 //
-//	len(mockedconverter.PDF2MDCalls())
-func (mock *converterMock) PDF2MDCalls() []struct {
+//	len(mockedconverter.PDF2TextCalls())
+func (mock *converterMock) PDF2TextCalls() []struct {
 	Raw []byte
 } {
 	var calls []struct {
 		Raw []byte
 	}
-	mock.lockPDF2MD.RLock()
-	calls = mock.calls.PDF2MD
-	mock.lockPDF2MD.RUnlock()
+	mock.lockPDF2Text.RLock()
+	calls = mock.calls.PDF2Text
+	mock.lockPDF2Text.RUnlock()
 	return calls
 }

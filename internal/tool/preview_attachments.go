@@ -36,7 +36,7 @@ type previewAttachmentsSvc interface {
 }
 
 type pdfConverter interface {
-	PDF2MD(raw []byte) (string, error)
+	PDF2Text(raw []byte) (string, error)
 }
 
 // NewPreviewAttachments creates a new PreviewAttachments tool.
@@ -130,7 +130,7 @@ func (t *PreviewAttachments) extractAttachmentContent(data, mimeType, filename s
 		return string(decodedData), nil
 
 	case mimeType == "application/pdf":
-		return t.conv.PDF2MD(decodedData)
+		return t.conv.PDF2Text(decodedData)
 
 	case strings.HasSuffix(filename, ".txt") || strings.HasSuffix(filename, ".md"):
 		return string(decodedData), nil

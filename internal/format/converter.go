@@ -9,49 +9,17 @@ import (
 )
 
 const (
-	cmdPdfToHTML = "pdftohtml"
+	cmdPdfToText = "pdftotext"
 	cmdPandoc    = "pandoc"
 )
 
 // Converter handles document format conversions.
 type Converter struct{}
 
-// PDF2MD converts PDF content to Markdown.
-func (c Converter) PDF2MD(raw []byte) (string, error) {
-	tmpPDF, err := os.CreateTemp("", "pdf-*.pdf")
-	if err != nil {
-		return "", fmt.Errorf("os.CreateTemp failed: %w", err)
-	}
-	defer func() {
-		if err := tmpPDF.Close(); err != nil {
-			log.Println(fmt.Errorf("tmpPDF.Close failed: %w", err))
-		}
-		if err := os.Remove(tmpPDF.Name()); err != nil {
-			log.Println(fmt.Errorf("os.Remove(%s) failed: %w", tmpPDF.Name(), err))
-		}
-	}()
-
-	if _, err := tmpPDF.Write(raw); err != nil {
-		return "", fmt.Errorf("tmpPDF.Write failed: %w", err)
-	}
-
-	// Convert PDF to HTML using pdftohtml
-	// -s: generate single HTML page
-	// -i: ignore images
-	// -noframes: single file output
-	// -stdout: output to stdout
-	cmd := exec.Command(cmdPdfToHTML, "-s", "-i", "-noframes", "-stdout", tmpPDF.Name())
-	htmlOutput, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("pdftohtml failed: %w", err)
-	}
-
-	// Convert HTML to Markdown
-	return c.HTML2MD(htmlOutput)
-}
-
 // HTML2MD converts HTML content to Markdown.
 func (c Converter) HTML2MD(raw []byte) (string, error) {
+	simplified := UnwrapTableLayout(raw)
+
 	tmpHTML, err := os.CreateTemp("", "html-*.html")
 	if err != nil {
 		return "", fmt.Errorf("os.CreateTemp failed: %w", err)
@@ -65,14 +33,47 @@ func (c Converter) HTML2MD(raw []byte) (string, error) {
 		}
 	}()
 
-	if _, err := tmpHTML.Write(raw); err != nil {
+	if _, err := tmpHTML.Write(simplified); err != nil {
 		return "", fmt.Errorf("tmpHTML.Write failed: %w", err)
 	}
 
-	cmd := exec.Command(cmdPandoc, "-f", "html", "-t", "markdown", "--wrap=none", tmpHTML.Name())
+	// Use CommonMark format for optimal balance of structure preservation and token efficiency
+	// CommonMark preserves links, emphasis, and lists while being ~50% smaller than original HTML
+	cmd := exec.Command(cmdPandoc, "-f", "html", "-t", "commonmark", "--wrap=none", tmpHTML.Name())
+	log.Printf("Running command: %s", cmd.String())
 	output, err := cmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("pandoc conversion failed: %w", err)
+	}
+
+	return string(output), nil
+}
+
+// PDF2Text extracts plain text from PDF content.
+func (c Converter) PDF2Text(raw []byte) (string, error) {
+	tmpDir, err := os.MkdirTemp("", "pdfconv-*")
+	if err != nil {
+		return "", fmt.Errorf("os.MkdirTemp failed: %w", err)
+	}
+	defer func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			log.Println(fmt.Errorf("os.RemoveAll(%s) failed: %w", tmpDir, err))
+		}
+	}()
+
+	pdfPath := tmpDir + "/document.pdf"
+	if err := os.WriteFile(pdfPath, raw, 0600); err != nil {
+		return "", fmt.Errorf("os.WriteFile failed: %w", err)
+	}
+
+	// Convert PDF to text using pdftotext
+	// -layout: maintain original physical layout
+	// -: output to stdout
+	cmd := exec.Command(cmdPdfToText, "-layout", pdfPath, "-")
+	log.Printf("Running command: %s", cmd.String())
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("pdftotext failed: %w", err)
 	}
 
 	return string(output), nil

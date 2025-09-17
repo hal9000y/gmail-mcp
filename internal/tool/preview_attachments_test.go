@@ -90,7 +90,7 @@ func TestPreviewAttachments(t *testing.T) {
 						ID:       "2",
 						Filename: "report.pdf",
 						MimeType: "application/pdf",
-						Content:  "**PDF converted to markdown**",
+						Content:  "PDF content as plain text",
 					},
 				},
 			},
@@ -107,8 +107,8 @@ func TestPreviewAttachments(t *testing.T) {
 
 	gmailSvc := newPreviewAttachmentsGmailSvc()
 	converter := &converterMock{
-		PDF2MDFunc: func(_ []byte) (string, error) {
-			return "**PDF converted to markdown**", nil
+		PDF2TextFunc: func(_ []byte) (string, error) {
+			return "PDF content as plain text", nil
 		},
 	}
 
