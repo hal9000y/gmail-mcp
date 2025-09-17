@@ -216,9 +216,26 @@ func unwrapTable(table *html.Node) {
 
 func extractTableContent(n *html.Node, content *[]*html.Node) {
 	if n.Type == html.ElementNode && isTableElement(n.Data) {
-		// Skip table wrapper elements, but process children
-		for c := n.FirstChild; c != nil; c = c.NextSibling {
-			extractTableContent(c, content)
+		// Special handling for tr elements - add line break after each row
+		if n.Data == "tr" {
+			initialLen := len(*content)
+			// Process the row's content
+			for c := n.FirstChild; c != nil; c = c.NextSibling {
+				extractTableContent(c, content)
+			}
+			// Add a line break after the row if it added any content
+			if len(*content) > initialLen {
+				lineBreak := &html.Node{
+					Type: html.TextNode,
+					Data: "\n",
+				}
+				*content = append(*content, lineBreak)
+			}
+		} else {
+			// Skip other table wrapper elements, but process children
+			for c := n.FirstChild; c != nil; c = c.NextSibling {
+				extractTableContent(c, content)
+			}
 		}
 	} else if n.Type == html.ElementNode {
 		// Keep other elements

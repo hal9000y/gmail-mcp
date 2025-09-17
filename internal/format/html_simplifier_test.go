@@ -26,7 +26,9 @@ func TestUnwrapTableLayout(t *testing.T) {
 				</table>
 			</body></html>`,
 			expected: `<html><head></head><body>
-				Content line 1Content line 2
+				Content line 1
+Content line 2
+
 			</body></html>`,
 		},
 		{
@@ -42,7 +44,7 @@ func TestUnwrapTableLayout(t *testing.T) {
 					</td></tr>
 				</table>
 			</body></html>`,
-			expected: "<html><head></head><body>\n\t\t\t\t<p>Nested content</p>\n\t\t\t</body></html>",
+			expected: "<html><head></head><body>\n\t\t\t\t<p>Nested content</p>\n\n\t\t\t</body></html>",
 		},
 		{
 			name: "data_table_with_headers",
@@ -97,6 +99,7 @@ func TestUnwrapTableLayout(t *testing.T) {
 			</body></html>`,
 			expected: `<html><head></head><body>
 				Layout content
+
 			</body></html>`,
 		},
 		{
@@ -108,6 +111,7 @@ func TestUnwrapTableLayout(t *testing.T) {
 			</body></html>`,
 			expected: `<html><head></head><body>
 				<div>Wrapped content</div>
+
 			</body></html>`,
 		},
 		{
@@ -173,7 +177,7 @@ func TestUnwrapTableLayout(t *testing.T) {
 				</table>
 				<p>After table</p>
 			</body></html>`,
-			expected: "<html><head></head><body>\n\t\t\t\t<p>Before table</p>\n\t\t\t\t<h1>Title</h1><p>Paragraph</p><ul>\n\t\t\t\t\t\t\t<li>Item 1</li>\n\t\t\t\t\t\t\t<li>Item 2</li>\n\t\t\t\t\t\t</ul>\n\t\t\t\t<p>After table</p>\n\t\t\t</body></html>",
+			expected: "<html><head></head><body>\n\t\t\t\t<p>Before table</p>\n\t\t\t\t<h1>Title</h1><p>Paragraph</p><ul>\n\t\t\t\t\t\t\t<li>Item 1</li>\n\t\t\t\t\t\t\t<li>Item 2</li>\n\t\t\t\t\t\t</ul>\n\n\t\t\t\t<p>After table</p>\n\t\t\t</body></html>",
 		},
 		{
 			name: "table_with_attributes",
@@ -184,7 +188,7 @@ func TestUnwrapTableLayout(t *testing.T) {
 					</td></tr>
 				</table>
 			</body></html>`,
-			expected: "<html><head></head><body>\n\t\t\t\t<img src=\"logo.png\" alt=\"Logo\"/>\n\t\t\t</body></html>",
+			expected: "<html><head></head><body>\n\t\t\t\t<img src=\"logo.png\" alt=\"Logo\"/>\n\n\t\t\t</body></html>",
 		},
 		{
 			name: "deeply_nested_tables",
@@ -199,7 +203,7 @@ func TestUnwrapTableLayout(t *testing.T) {
 					</td></tr></table>
 				</td></tr></table>
 			</body></html>`,
-			expected: "<html><head></head><body>\n\t\t\t\t<p>Deep content</p>\n\t\t\t</body></html>",
+			expected: "<html><head></head><body>\n\t\t\t\t<p>Deep content</p>\n\n\t\t\t</body></html>",
 		},
 		{
 			name: "table_with_th_elements",
@@ -221,7 +225,10 @@ func TestUnwrapTableLayout(t *testing.T) {
 				</table>
 			</body></html>`,
 			expected: `<html><head></head><body>
-				Row 1Row 2Row 3
+				Row 1
+Row 2
+Row 3
+
 			</body></html>`,
 		},
 		{
@@ -260,7 +267,7 @@ func TestUnwrapTableLayoutWithRealEmail(t *testing.T) {
 		</table>
 	</body></html>`
 
-	expected := "<html><head></head><body>\n\t\t<img src=\"https://example.com/logo.png\" alt=\"Company Logo\"/><p>Lorem ipsum dolor sit amet</p>\n\t</body></html>"
+	expected := "<html><head></head><body>\n\t\t<img src=\"https://example.com/logo.png\" alt=\"Company Logo\"/><p>Lorem ipsum dolor sit amet</p>\n\n\t</body></html>"
 
 	result := format.UnwrapTableLayout([]byte(emailHTML))
 	assert.Equal(t, expected, string(result))
@@ -338,6 +345,7 @@ func TestUnwrapTableLayoutComplexNesting(t *testing.T) {
 
 	expected := `<html><head></head><body>
 		Header ContentBody ContentFooter Content
+
 	</body></html>`
 
 	result := format.UnwrapTableLayout([]byte(input))
