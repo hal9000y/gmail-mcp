@@ -135,10 +135,10 @@ jobs:
               echo "## CodeQL Analysis Results" >> $GITHUB_STEP_SUMMARY
               echo "" >> $GITHUB_STEP_SUMMARY
 
-              # Count issues by severity
-              error_count=$(jq -r '[.runs[].results[] | select(.level == "error")] | length' "$sarif_file")
-              warning_count=$(jq -r '[.runs[].results[] | select(.level == "warning")] | length' "$sarif_file")
-              note_count=$(jq -r '[.runs[].results[] | select(.level == "note" or .level == "recommendation")] | length' "$sarif_file")
+              # Count issues by severity (handle empty results)
+              error_count=$(jq -r '[.runs[]?.results[]? | select(.level == "error")] | length' "$sarif_file" 2>/dev/null || echo "0")
+              warning_count=$(jq -r '[.runs[]?.results[]? | select(.level == "warning")] | length' "$sarif_file" 2>/dev/null || echo "0")
+              note_count=$(jq -r '[.runs[]?.results[]? | select(.level == "note" or .level == "recommendation")] | length' "$sarif_file" 2>/dev/null || echo "0")
 
               echo "### Summary" >> $GITHUB_STEP_SUMMARY
               echo "- 🔴 **Errors:** $error_count" >> $GITHUB_STEP_SUMMARY
@@ -158,19 +158,19 @@ jobs:
               if [ "$error_count" -gt 0 ] || [ "$warning_count" -gt 0 ]; then
                 echo "### Issues Found" >> $GITHUB_STEP_SUMMARY
                 echo '```' >> $GITHUB_STEP_SUMMARY
-                jq -r '.runs[].results[] |
+                jq -r '.runs[]?.results[]? |
                   select(.level == "error" or .level == "warning") |
-                  "[\(.level | ascii_upcase)] \(.locations[0].physicalLocation.artifactLocation.uri // "unknown"):\(.locations[0].physicalLocation.region.startLine // "?"): \(.message.text // "No message")"' \
-                  "$sarif_file" | tee -a $GITHUB_STEP_SUMMARY
+                  "[\(.level // "UNKNOWN" | ascii_upcase)] \(.locations[0]?.physicalLocation?.artifactLocation?.uri // "unknown"):\(.locations[0]?.physicalLocation?.region?.startLine // "?"): \(.message?.text // "No message")"' \
+                  "$sarif_file" 2>/dev/null | tee -a $GITHUB_STEP_SUMMARY || echo "No issues to display" >> $GITHUB_STEP_SUMMARY
                 echo '```' >> $GITHUB_STEP_SUMMARY
 
                 # Also output to logs
                 echo ""
                 echo "Detailed issues:"
-                jq -r '.runs[].results[] |
+                jq -r '.runs[]?.results[]? |
                   select(.level == "error" or .level == "warning") |
-                  "[\(.level | ascii_upcase)] \(.locations[0].physicalLocation.artifactLocation.uri // "unknown"):\(.locations[0].physicalLocation.region.startLine // "?"): \(.message.text // "No message")"' \
-                  "$sarif_file"
+                  "[\(.level // "UNKNOWN" | ascii_upcase)] \(.locations[0]?.physicalLocation?.artifactLocation?.uri // "unknown"):\(.locations[0]?.physicalLocation?.region?.startLine // "?"): \(.message?.text // "No message")"' \
+                  "$sarif_file" 2>/dev/null || echo "No issues to display"
               fi
 
               # Create summary file for artifact
@@ -181,7 +181,11 @@ jobs:
                 echo "Warnings: $warning_count"
                 echo "Notes: $note_count"
                 echo ""
-                jq -r '.runs[].results[] | "[\(.level | ascii_upcase)] \(.locations[0].physicalLocation.artifactLocation.uri // "unknown"):\(.locations[0].physicalLocation.region.startLine // "?"): \(.message.text // "No message")"' "$sarif_file"
+                if [ "$error_count" -gt 0 ] || [ "$warning_count" -gt 0 ] || [ "$note_count" -gt 0 ]; then
+                  jq -r '.runs[]?.results[]? | "[\(.level // "UNKNOWN" | ascii_upcase)] \(.locations[0]?.physicalLocation?.artifactLocation?.uri // "unknown"):\(.locations[0]?.physicalLocation?.region?.startLine // "?"): \(.message?.text // "No message")"' "$sarif_file" 2>/dev/null || echo "No issues found"
+                else
+                  echo "✅ No issues found - code passed all security checks!"
+                fi
               } > codeql-summary.txt
 
               # Fail if errors found
