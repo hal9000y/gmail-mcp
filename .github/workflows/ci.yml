@@ -126,16 +126,75 @@ jobs:
           output: ./codeql-results
           upload: false  # Don't upload to GitHub code scanning
 
-      - name: Generate CSV report
+      - name: Process and display results
         if: always()
         run: |
           if [ -d "./codeql-results" ]; then
             sarif_file=$(find ./codeql-results -name "*.sarif" -type f | head -1)
             if [ -n "$sarif_file" ]; then
-              echo "Found SARIF file: $sarif_file"
-              # Create a simple summary
-              jq -r '.runs[].results[] | "\(.level // "warning"):\(.message.text // "No message")"' "$sarif_file" > codeql-summary.txt || true
+              echo "## CodeQL Analysis Results" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+
+              # Count issues by severity
+              error_count=$(jq -r '[.runs[].results[] | select(.level == "error")] | length' "$sarif_file")
+              warning_count=$(jq -r '[.runs[].results[] | select(.level == "warning")] | length' "$sarif_file")
+              note_count=$(jq -r '[.runs[].results[] | select(.level == "note" or .level == "recommendation")] | length' "$sarif_file")
+
+              echo "### Summary" >> $GITHUB_STEP_SUMMARY
+              echo "- 🔴 **Errors:** $error_count" >> $GITHUB_STEP_SUMMARY
+              echo "- 🟡 **Warnings:** $warning_count" >> $GITHUB_STEP_SUMMARY
+              echo "- 🔵 **Notes:** $note_count" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+
+              # Display in logs
+              echo "================================================"
+              echo "CodeQL Analysis Results:"
+              echo "  Errors: $error_count"
+              echo "  Warnings: $warning_count"
+              echo "  Notes: $note_count"
+              echo "================================================"
+
+              # Show details of errors and warnings
+              if [ "$error_count" -gt 0 ] || [ "$warning_count" -gt 0 ]; then
+                echo "### Issues Found" >> $GITHUB_STEP_SUMMARY
+                echo '```' >> $GITHUB_STEP_SUMMARY
+                jq -r '.runs[].results[] |
+                  select(.level == "error" or .level == "warning") |
+                  "[\(.level | ascii_upcase)] \(.locations[0].physicalLocation.artifactLocation.uri // "unknown"):\(.locations[0].physicalLocation.region.startLine // "?"): \(.message.text // "No message")"' \
+                  "$sarif_file" | tee -a $GITHUB_STEP_SUMMARY
+                echo '```' >> $GITHUB_STEP_SUMMARY
+
+                # Also output to logs
+                echo ""
+                echo "Detailed issues:"
+                jq -r '.runs[].results[] |
+                  select(.level == "error" or .level == "warning") |
+                  "[\(.level | ascii_upcase)] \(.locations[0].physicalLocation.artifactLocation.uri // "unknown"):\(.locations[0].physicalLocation.region.startLine // "?"): \(.message.text // "No message")"' \
+                  "$sarif_file"
+              fi
+
+              # Create summary file for artifact
+              {
+                echo "CodeQL Analysis Results"
+                echo "======================="
+                echo "Errors: $error_count"
+                echo "Warnings: $warning_count"
+                echo "Notes: $note_count"
+                echo ""
+                jq -r '.runs[].results[] | "[\(.level | ascii_upcase)] \(.locations[0].physicalLocation.artifactLocation.uri // "unknown"):\(.locations[0].physicalLocation.region.startLine // "?"): \(.message.text // "No message")"' "$sarif_file"
+              } > codeql-summary.txt
+
+              # Fail if errors found
+              if [ "$error_count" -gt 0 ]; then
+                echo ""
+                echo "❌ Build failed due to $error_count error(s) found by CodeQL"
+                exit 1
+              fi
+            else
+              echo "⚠️ No SARIF file found in results"
             fi
+          else
+            echo "⚠️ No CodeQL results directory found"
           fi
 
       - name: Upload CodeQL results
