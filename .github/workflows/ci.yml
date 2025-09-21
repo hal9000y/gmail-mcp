@@ -107,10 +107,6 @@ jobs:
   codeql:
     name: CodeQL Analysis
     runs-on: ubuntu-latest
-    permissions:
-      actions: read
-      contents: read
-      security-events: write
     steps:
       - uses: actions/checkout@v5
 
@@ -127,3 +123,26 @@ jobs:
         uses: github/codeql-action/analyze@v3
         with:
           category: "/language:go"
+          output: ./codeql-results
+          upload: false  # Don't upload to GitHub code scanning
+
+      - name: Generate CSV report
+        if: always()
+        run: |
+          if [ -d "./codeql-results" ]; then
+            sarif_file=$(find ./codeql-results -name "*.sarif" -type f | head -1)
+            if [ -n "$sarif_file" ]; then
+              echo "Found SARIF file: $sarif_file"
+              # Create a simple summary
+              jq -r '.runs[].results[] | "\(.level // "warning"):\(.message.text // "No message")"' "$sarif_file" > codeql-summary.txt || true
+            fi
+          fi
+
+      - name: Upload CodeQL results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: codeql-results
+          path: |
+            ./codeql-results/
+            ./codeql-summary.txt
