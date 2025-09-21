@@ -3,6 +3,8 @@ package auth
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,6 +12,7 @@ import (
 	"log"
 	"os"
 	"sync"
+	"time"
 
 	"golang.org/x/oauth2"
 )
@@ -23,11 +26,16 @@ type Token struct {
 	cfg         *oauth2.Config
 	token       *oauth2.Token
 	persistPath string
+	stateStore  map[string]time.Time
 }
 
 // NewToken creates a Token manager, loading from disk if path provided.
 func NewToken(cfg *oauth2.Config, persistPath string) (*Token, error) {
-	t := &Token{cfg: cfg, persistPath: persistPath}
+	t := &Token{
+		cfg:         cfg,
+		persistPath: persistPath,
+		stateStore:  make(map[string]time.Time),
+	}
 	if persistPath == "" {
 		return t, nil
 	}
@@ -53,13 +61,68 @@ func NewToken(cfg *oauth2.Config, persistPath string) (*Token, error) {
 	return t, nil
 }
 
-// RedirectURL generates the OAuth2 authorization URL.
+// RedirectURL generates the OAuth2 authorization URL with a secure random state.
 func (t *Token) RedirectURL() string {
-	return t.cfg.AuthCodeURL("state-token", oauth2.AccessTypeOffline)
+	state := t.generateState()
+	return t.cfg.AuthCodeURL(state, oauth2.AccessTypeOffline)
 }
 
-// AuthorizeCode exchanges an authorization code for an access token.
-func (t *Token) AuthorizeCode(ctx context.Context, code string) error {
+// generateState creates a cryptographically secure random state value.
+func (t *Token) generateState() string {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		log.Printf("Failed to generate random state: %v", err)
+		return ""
+	}
+	state := base64.URLEncoding.EncodeToString(b)
+
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	// Store state with expiration (5 minutes)
+	t.stateStore[state] = time.Now().Add(5 * time.Minute)
+
+	// Clean up expired states
+	now := time.Now()
+	for s, exp := range t.stateStore {
+		if exp.Before(now) {
+			delete(t.stateStore, s)
+		}
+	}
+
+	return state
+}
+
+// ValidateState checks if the provided state is valid and not expired.
+func (t *Token) ValidateState(state string) bool {
+	if state == "" {
+		return false
+	}
+
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	expiry, exists := t.stateStore[state]
+	if !exists {
+		return false
+	}
+
+	if time.Now().After(expiry) {
+		delete(t.stateStore, state)
+		return false
+	}
+
+	// State is valid, remove it (one-time use)
+	delete(t.stateStore, state)
+	return true
+}
+
+// AuthorizeCode exchanges an authorization code for an access token after validating state.
+func (t *Token) AuthorizeCode(ctx context.Context, code string, state string) error {
+	if !t.ValidateState(state) {
+		return errors.New("invalid or expired state parameter")
+	}
+
 	t.mu.Lock()
 	defer t.mu.Unlock()
 

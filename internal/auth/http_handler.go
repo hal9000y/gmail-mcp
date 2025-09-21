@@ -12,7 +12,7 @@ import (
 )
 
 type tok interface {
-	AuthorizeCode(context.Context, string) error
+	AuthorizeCode(context.Context, string, string) error
 	OAuthToken() (*oauth2.Token, error)
 	RedirectURL() string
 }
@@ -34,7 +34,8 @@ func (h *HTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if code := r.URL.Query().Get("code"); code != "" {
-		if err := h.tok.AuthorizeCode(r.Context(), code); err != nil {
+		state := r.URL.Query().Get("state")
+		if err := h.tok.AuthorizeCode(r.Context(), code, state); err != nil {
 			log.Println("h.tok.AuthorizeCode failed", err)
 			http.Error(w, "Unable to authorize provided code", http.StatusBadRequest)
 			return
