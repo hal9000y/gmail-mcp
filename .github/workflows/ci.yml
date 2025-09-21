@@ -103,3 +103,27 @@ jobs:
 
       - name: Build
         run: go build -mod=vendor -v ./cmd/gmail-mcp
+
+  codeql:
+    name: CodeQL Analysis
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: go
+          queries: ./codeql-pack/go-security-and-quality.qls
+
+      - name: Build project for CodeQL
+        run: go build ./...
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:go"

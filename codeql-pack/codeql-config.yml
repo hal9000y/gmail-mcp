@@ -1,0 +1,28 @@
+# CodeQL Configuration
+# Latest docs: https://docs.github.com/en/code-security/code-scanning/creating-an-advanced-setup-for-code-scanning/codeql-code-scanning-for-compiled-languages
+# Query suites: https://docs.github.com/en/code-security/codeql-cli/using-the-advanced-functionality-of-the-codeql-cli/creating-codeql-query-suites
+
+name: "Gmail MCP Security Config"
+
+# Query suites to run
+queries:
+  - uses: security-and-quality
+  - uses: security-extended
+
+# Paths to analyze
+paths:
+  - cmd
+  - internal
+
+# Paths to ignore
+paths-ignore:
+  - vendor
+  - "**/*_test.go"
+
+# Custom query directories
+query-filters:
+  - include:
+      severity:
+        - error
+        - warning
+        - recommendation

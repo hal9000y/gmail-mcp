@@ -1,5 +1,6 @@
 .__*
 .env.local
 .DS_Store
+.vscode
 /build
 /data
