@@ -1,6 +1,3 @@
-# CodeQL Pack Configuration
-# Documentation: https://docs.github.com/en/code-security/codeql-cli/using-the-advanced-functionality-of-the-codeql-cli/creating-codeql-query-packs
-# Latest guidelines: https://codeql.github.com/docs/writing-codeql-queries/
 name: gmail-mcp/security
 version: 1.0.0
 description: Security analysis for Gmail MCP server

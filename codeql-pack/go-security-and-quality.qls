@@ -1,8 +1,3 @@
-# CodeQL Query Suite - Go Security and Quality
-# Documentation: https://codeql.github.com/docs/codeql-cli/creating-codeql-query-suites/
-# Available suites: https://github.com/github/codeql/tree/main/go/ql/src/codeql-suites
-# Query writing guide: https://codeql.github.com/docs/writing-codeql-queries/codeql-queries-for-go/
-
 - description: Import standard Go security and quality queries
-- import: codeql-suites/go-security-and-quality.qls
+  import: codeql-suites/go-security-and-quality.qls
   from: codeql/go-queries
