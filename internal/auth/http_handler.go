@@ -32,7 +32,7 @@ func (h *HTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		rURL, err := h.tok.RedirectURL()
 		if err != nil {
 			log.Println(fmt.Errorf("h.tok.RedirectURL failed: %w", err))
-			http.Error(w, "Unable to generated RedirectURL", http.StatusInternalServerError)
+			http.Error(w, "Unable to generate RedirectURL", http.StatusInternalServerError)
 			return
 		}
 		http.Redirect(w, r, rURL, http.StatusMovedPermanently)
