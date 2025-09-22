@@ -14,7 +14,7 @@ import (
 type tok interface {
 	AuthorizeCode(context.Context, string, string) error
 	OAuthToken() (*oauth2.Token, error)
-	RedirectURL() string
+	RedirectURL() (string, error)
 }
 
 // HTTPHandler handles OAuth2 authentication flow via HTTP.
@@ -29,14 +29,20 @@ func NewHTTPHandler(tok tok) *HTTPHandler {
 
 func (h *HTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Query().Get("redirect") != "" {
-		http.Redirect(w, r, h.tok.RedirectURL(), http.StatusMovedPermanently)
+		rURL, err := h.tok.RedirectURL()
+		if err != nil {
+			log.Println(fmt.Errorf("h.tok.RedirectURL failed: %w", err))
+			http.Error(w, "Unable to generated RedirectURL", http.StatusInternalServerError)
+			return
+		}
+		http.Redirect(w, r, rURL, http.StatusMovedPermanently)
 		return
 	}
 
 	if code := r.URL.Query().Get("code"); code != "" {
 		state := r.URL.Query().Get("state")
 		if err := h.tok.AuthorizeCode(r.Context(), code, state); err != nil {
-			log.Println("h.tok.AuthorizeCode failed", err)
+			log.Println(fmt.Errorf("h.tok.AuthorizeCode failed: %w", err))
 			http.Error(w, "Unable to authorize provided code", http.StatusBadRequest)
 			return
 		}

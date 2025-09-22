@@ -62,39 +62,38 @@ func NewToken(cfg *oauth2.Config, persistPath string) (*Token, error) {
 }
 
 // RedirectURL generates the OAuth2 authorization URL with a secure random state.
-func (t *Token) RedirectURL() string {
-	state := t.generateState()
-	return t.cfg.AuthCodeURL(state, oauth2.AccessTypeOffline)
+func (t *Token) RedirectURL() (string, error) {
+	state, err := t.generateState()
+	if err != nil {
+		return "", fmt.Errorf("generateState failed: %w", err)
+	}
+
+	return t.cfg.AuthCodeURL(state, oauth2.AccessTypeOffline), nil
 }
 
-// generateState creates a cryptographically secure random state value.
-func (t *Token) generateState() string {
+func (t *Token) generateState() (string, error) {
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
-		log.Printf("Failed to generate random state: %v", err)
-		return ""
+		return "", fmt.Errorf("rand.Read failed: %w", err)
 	}
 	state := base64.URLEncoding.EncodeToString(b)
 
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	// Store state with expiration (5 minutes)
-	t.stateStore[state] = time.Now().Add(5 * time.Minute)
-
-	// Clean up expired states
 	now := time.Now()
+	t.stateStore[state] = now.Add(5 * time.Minute)
+
 	for s, exp := range t.stateStore {
 		if exp.Before(now) {
 			delete(t.stateStore, s)
 		}
 	}
 
-	return state
+	return state, nil
 }
 
-// ValidateState checks if the provided state is valid and not expired.
-func (t *Token) ValidateState(state string) bool {
+func (t *Token) validateState(state string) bool {
 	if state == "" {
 		return false
 	}
@@ -107,19 +106,14 @@ func (t *Token) ValidateState(state string) bool {
 		return false
 	}
 
-	if time.Now().After(expiry) {
-		delete(t.stateStore, state)
-		return false
-	}
-
-	// State is valid, remove it (one-time use)
 	delete(t.stateStore, state)
-	return true
+
+	return !time.Now().After(expiry)
 }
 
 // AuthorizeCode exchanges an authorization code for an access token after validating state.
 func (t *Token) AuthorizeCode(ctx context.Context, code string, state string) error {
-	if !t.ValidateState(state) {
+	if !t.validateState(state) {
 		return errors.New("invalid or expired state parameter")
 	}
 
