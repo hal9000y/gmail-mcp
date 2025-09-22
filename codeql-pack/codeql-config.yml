@@ -1,0 +1,20 @@
+name: "Gmail MCP Security Config"
+
+queries:
+  - uses: security-and-quality
+  - uses: security-extended
+
+paths:
+  - cmd
+  - internal
+
+paths-ignore:
+  - vendor
+  - "**/*_test.go"
+
+query-filters:
+  - include:
+      severity:
+        - error
+        - warning
+        - recommendation

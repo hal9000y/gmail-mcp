@@ -1,0 +1,7 @@
+name: gmail-mcp/security
+version: 1.0.0
+description: Security analysis for Gmail MCP server
+license: MIT
+dependencies:
+  codeql/go-queries: "*"
+  codeql/go-all: "*"

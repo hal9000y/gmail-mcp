@@ -1,0 +1,3 @@
+- description: Import standard Go security and quality queries
+  import: codeql-suites/go-security-and-quality.qls
+  from: codeql/go-queries

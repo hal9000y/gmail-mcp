@@ -1,0 +1,24 @@
+version: "2"
+
+linters:
+  default: standard
+
+  enable:
+    - revive
+    - errcheck
+    - staticcheck
+    - cyclop
+
+  exclusions:
+    rules:
+      - path: '_test\.go'
+        linters:
+          - errcheck
+
+formatters:
+  enable:
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/hal9000y/gmail-mcp

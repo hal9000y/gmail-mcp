@@ -1,0 +1,22 @@
+# CI Image Version: v4
+FROM golang:1.25-trixie
+
+# Install test dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    wget \
+    poppler-utils \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN ARCH=$(dpkg --print-architecture) && \
+    if [ "$ARCH" = "amd64" ]; then \
+        PANDOC_URL="https://github.com/jgm/pandoc/releases/download/3.8/pandoc-3.8-1-amd64.deb"; \
+    elif [ "$ARCH" = "arm64" ]; then \
+        PANDOC_URL="https://github.com/jgm/pandoc/releases/download/3.8/pandoc-3.8-1-arm64.deb"; \
+    else \
+        echo "Unsupported architecture: $ARCH" && exit 1; \
+    fi && \
+    wget -O /tmp/pandoc.deb "$PANDOC_URL" && \
+    dpkg -i /tmp/pandoc.deb && \
+    rm /tmp/pandoc.deb
+
+WORKDIR /workspace
